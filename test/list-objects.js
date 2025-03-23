@@ -1,4 +1,4 @@
-import { S3Client, ListObjectsCommand } from "@aws-sdk/client-s3";
+import { S3Client, ListObjectsCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 
 const s3Client = new S3Client({
   endpoint: "http://localhost:80", 
@@ -11,7 +11,7 @@ const s3Client = new S3Client({
 });
 
 async function testS3API() {
-  const command = new ListObjectsCommand({
+  const command = new ListObjectsV2Command({
     Bucket: "test", // /bucket name
     Prefix: "folder/", // folder
     MaxKeys: 2 //no clue what this does
