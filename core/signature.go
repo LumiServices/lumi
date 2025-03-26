@@ -36,10 +36,12 @@ func extractChecksumAlgorithm(amzTrailerHeader string) (ChecksumAlgorithm, error
 	}
 }
 
-type chuckheaders struct {
+type chunkHeaders struct {
+	Credential string
+	region     string //set to auto I guess? (I think I might be right)
 }
 
-func readS3Chuck() {
+func readS3Chunk() {
 
 }
 
