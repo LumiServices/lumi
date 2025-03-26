@@ -44,6 +44,7 @@ func ListObjectsV2Handler(c *gin.Context) {
 		c.XML(http.StatusBadRequest, gin.H{"error": "Invalid max-keys value"})
 		return
 	}
+
 	var sampleObjects = []Object{
 		{Key: "file1.txt", LastModified: "2024-03-22T10:00:00Z", Size: 1234, ETag: `"fba9dede5f27731c9771645a39863328"`, StorageClass: "STANDARD"},
 		{Key: "file2.txt", LastModified: "2024-03-21T09:00:00Z", Size: 5678, ETag: `"fba9dede5f27731c9771645a39863328"`, StorageClass: "STANDARD"},
