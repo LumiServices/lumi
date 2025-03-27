@@ -1,7 +1,11 @@
 package core
 
 import (
+	"bufio"
 	"errors"
+	"io"
+	"strconv"
+	"strings"
 )
 
 type ChecksumAlgorithm int
@@ -37,17 +41,58 @@ func extractChecksumAlgorithm(amzTrailerHeader string) (ChecksumAlgorithm, error
 }
 
 type chunkHeaders struct {
-	Credential string
-	region     string //set to auto I guess? (I think I might be right)
+	reader         *bufio.Reader
+	Credential     string
+	region         string
+	chunkSize      uint64
+	chunkSignature string
 }
 
-func readS3Chunk() {
+func (c *chunkHeaders) readS3Chunk() ([]byte, error) {
+	headerline, err := c.reader.ReadString('\n')
+	if err != nil {
+		return nil, err
+	}
 
+	chunkSize, chunkSignature, err := parseS3ChunkExtension([]byte(strings.TrimSpace(headerline)))
+	if err != nil {
+		return nil, err
+	}
+
+	c.chunkSize = chunkSize
+	c.chunkSignature = chunkSignature
+
+	if c.chunkSize == 0 {
+		return nil, io.EOF
+	}
+
+	chunkData := make([]byte, c.chunkSize)
+	_, err = io.ReadFull(c.reader, chunkData)
+	if err != nil {
+		return nil, err
+	}
+
+	return chunkData, nil
+}
+
+func parseS3ChunkExtension(header []byte) (uint64, string, error) {
+	parts := strings.Split(string(header), ";")
+	chunkSizeHex := parts[0]
+	chunkSize, err := strconv.ParseUint(chunkSizeHex, 16, 64)
+	if err != nil {
+		return 0, "", err
+	}
+	var chunkSignature string
+	if len(parts) > 1 && strings.HasPrefix(parts[1], "chunk-signature=") {
+		chunkSignature = strings.Split(parts[1], "=")[1]
+	}
+	return chunkSize, chunkSignature, nil
 }
 
 //can somebody hit me up on discord and tell me what streaming means 🙏🙏🙏
 //oh https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
 
 func seedSignature() {
+	// I think I need to seperate the files because idfk what I'm doin anymore...
 
 }
