@@ -11,6 +11,7 @@ func Serve(addr string, startbanner bool, debug bool) {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.Default()
+	r.Use()
 	r.GET("/:bucket/", ListObjectsV2Handler)
 	r.Run(addr)
 }

@@ -1,4 +1,4 @@
-package core
+package s3
 
 import (
 	"bufio"
@@ -89,10 +89,46 @@ func parseS3ChunkExtension(header []byte) (uint64, string, error) {
 	return chunkSize, chunkSignature, nil
 }
 
-//can somebody hit me up on discord and tell me what streaming means 🙏🙏🙏
-//oh https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
+//https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
+
+type Request struct {
+	Method         string
+	CanonicalURI   string
+	CanonicalQuery string
+	Headers        map[string]string
+	Payload        []byte
+}
+
+func GenerateSignatureV4(
+	AccessKeyID string,
+	SecretAccessKey string,
+	Region string,
+	Service string,
+	req Request,
+) (string, error) {
+	canonicalRequest := createCanonicalRequest(req)
+	date := req.Headers[X_AMZ_DATE]
+	stringToSign := stringToSign(canonicalRequest, date, Region, Service)
+	signature := calculateSignature(SecretAccessKey, date, Region, Service, stringToSign)
+	return signature, nil
+}
+
+func calculateSignature(SecretAccessKey, date, Region, Service string, stringToSign string) string {
+	return ""
+}
+
+func createCanonicalRequest(req Request) string {
+	return ""
+}
+
+func stringToSign(canonicalRequest,
+	date,
+	region,
+	service string) string {
+	return ""
+}
 
 func seedSignature() {
 	// I think I need to seperate the files because idfk what I'm doin anymore...
-
+	// I know what I'm doing now
 }
