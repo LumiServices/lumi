@@ -1,134 +1,102 @@
+// this needs a complete rewrite
 package s3
 
 import (
 	"bufio"
-	"errors"
-	"io"
-	"strconv"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"hash"
+	"net/http"
 	"strings"
-)
-
-type ChecksumAlgorithm int
-
-// result of a blank sha256 string
-const EmptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-
-// Headers used in AWSv4 sigs
-const (
-	X_AMZ_ALGORITHM      = "x-amz-algorithm"
-	X_AMZ_CREDENTIAL     = "x-amz-credential"
-	X_AMZ_DATE           = "x-amz-date"
-	X_AMZ_EXPIRES        = "x-amz-expires"
-	X_AMZ_SIGNEDHEADERS  = "x-amz-signedheaders"
-	X_AMZ_SIGNATURE      = "x-amz-signature"
-	X_AMZ_CONTENT_SHA256 = "x-amz-content-sha256"
-	X_AMZ_TRAILER        = "x-amz-trailer"
+	"time"
 )
 
 const (
-	ChecksumAlgorithmNone ChecksumAlgorithm = iota
-	ChecksumAlgorithmSHA256
+	emptySHA256                   = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	streamingContentSHA256        = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
+	streamingContentSHA256Trailer = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER"
+	signV4ChunkedAlgorithm        = "AWS4-HMAC-SHA256-PAYLOAD"
+	signV4ChunkedAlgorithmTrailer = "AWS4-HMAC-SHA256-TRAILER"
+	streamingContentEncoding      = "aws-chunked"
+	awsTrailerHeader              = "X-Amz-Trailer"
+	trailerKVSeparator            = ":"
 )
 
-func extractChecksumAlgorithm(amzTrailerHeader string) (ChecksumAlgorithm, error) {
-	//get the checksum from the header example: x-amz-content-sha256
-	switch amzTrailerHeader {
-	case "x-amz-checksum-sha256":
-		return ChecksumAlgorithmSHA256, nil
-	default:
-		return ChecksumAlgorithmNone, errors.New("unsupported checksum algorithm '" + amzTrailerHeader + "'")
-	}
+type serviceType string
+
+const SlashSeparator = "/"
+const serviceS3 serviceType = "s3"
+
+// AWS S3 authentication headers that should be skipped when signing the request
+// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+var awsS3AuthHeaders = map[string]struct{}{
+	"x-amz-content-sha256": {},
+	"x-amz-security-token": {},
+	"x-amz-algorithm":      {},
+	"x-amz-date":           {},
+	"x-amz-expires":        {},
+	"x-amz-signedheaders":  {},
+	"x-amz-credential":     {},
+	"x-amz-signature":      {},
 }
 
-type chunkHeaders struct {
-	reader         *bufio.Reader
-	Credential     string
-	region         string
-	chunkSize      uint64
-	chunkSignature string
+func (s *s3ChunkedReader) getChunkSignature() string {
+	hashedChunk := hex.EncodeToString(s.chunkSHA256Writer.Sum(nil))
+	alg := signV4Algorithm + "\n"
+	stringToSign := alg +
+		s.seedDate.Format(iso8601Format) + "\n" +
+		getScope(s.seedDate, s.region) + "\n" +
+		s.seedSignature + "\n" +
+		emptySHA256 + "\n" +
+		hashedChunk
+
+	signingKey := getSigningKey(s.SecretKey, s.seedDate, s.region, serviceS3)
+	newSignature := getSignature(signingKey, stringToSign)
+
+	return newSignature
 }
 
-func (c *chunkHeaders) readS3Chunk() ([]byte, error) {
-	headerline, err := c.reader.ReadString('\n')
-	if err != nil {
-		return nil, err
-	}
+func calculateSeedSignature() {
 
-	chunkSize, chunkSignature, err := parseS3ChunkExtension([]byte(strings.TrimSpace(headerline)))
-	if err != nil {
-		return nil, err
-	}
-
-	c.chunkSize = chunkSize
-	c.chunkSignature = chunkSignature
-
-	if c.chunkSize == 0 {
-		return nil, io.EOF
-	}
-
-	chunkData := make([]byte, c.chunkSize)
-	_, err = io.ReadFull(c.reader, chunkData)
-	if err != nil {
-		return nil, err
-	}
-
-	return chunkData, nil
 }
 
-func parseS3ChunkExtension(header []byte) (uint64, string, error) {
-	parts := strings.Split(string(header), ";")
-	chunkSizeHex := parts[0]
-	chunkSize, err := strconv.ParseUint(chunkSizeHex, 16, 64)
-	if err != nil {
-		return 0, "", err
-	}
-	var chunkSignature string
-	if len(parts) > 1 && strings.HasPrefix(parts[1], "chunk-signature=") {
-		chunkSignature = strings.Split(parts[1], "=")[1]
-	}
-	return chunkSize, chunkSignature, nil
+func getSigningKey(secretKey string, t time.Time, region string, stype serviceType) []byte {
+	date := sumHMAC([]byte("AWS4"+secretKey), []byte(t.Format(yyyymmdd)))
+	regionBytes := sumHMAC(date, []byte(region))
+	service := sumHMAC(regionBytes, []byte(stype))
+	signingKey := sumHMAC(service, []byte("aws4_request"))
+	return signingKey
 }
 
-//https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
-
-type Request struct {
-	Method         string
-	CanonicalURI   string
-	CanonicalQuery string
-	Headers        map[string]string
-	Payload        []byte
+func getSignature(signingKey []byte, stringToSign string) string {
+	return hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
 }
 
-func GenerateSignatureV4(
-	AccessKeyID string,
-	SecretAccessKey string,
-	Region string,
-	Service string,
-	req Request,
-) (string, error) {
-	canonicalRequest := createCanonicalRequest(req)
-	date := req.Headers[X_AMZ_DATE]
-	stringToSign := stringToSign(canonicalRequest, date, Region, Service)
-	signature := calculateSignature(SecretAccessKey, date, Region, Service, stringToSign)
-	return signature, nil
+func getScope(t time.Time, region string) string {
+	scope := strings.Join([]string{
+		t.Format(yyyymmdd),
+		region,
+		string(serviceS3),
+		"aws4_request",
+	}, SlashSeparator)
+	return scope
 }
 
-func calculateSignature(SecretAccessKey, date, Region, Service string, stringToSign string) string {
-	return ""
+func sumHMAC(key []byte, data []byte) []byte {
+	hash := hmac.New(sha256.New, key)
+	hash.Write(data)
+	return hash.Sum(nil)
 }
 
-func createCanonicalRequest(req Request) string {
-	return ""
-}
-
-func stringToSign(canonicalRequest,
-	date,
-	region,
-	service string) string {
-	return ""
-}
-
-func seedSignature() {
-	// I think I need to seperate the files because idfk what I'm doin anymore...
-	// I know what I'm doing now
+// most of this is stolen from https://github.com/minio/minio/blob/b67f0cf72160263bba62664c8e9433132ebdddf0/cmd/streaming-signature-v4.go#L226
+type s3ChunkedReader struct {
+	SecretKey         string
+	reader            *bufio.Reader
+	seedSignature     string
+	seedDate          time.Time
+	region            string
+	trailers          http.Header
+	chunkSHA256Writer hash.Hash
+	buffer            []byte
 }
