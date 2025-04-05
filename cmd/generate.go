@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/ros-e/lumi/core"
@@ -10,13 +11,14 @@ import (
 func NewGenerateCMD() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "generate",
-		Short: "Start the server",
+		Short: "Generate an access key and secret key",
 		Run: func(cmd *cobra.Command, args []string) {
-			db, err := core.ConnectDB()
+			accessKey, secretKey, err := core.GenerateCredentials()
 			if err != nil {
-				log.Fatalf("Failed to connect to DB: %v", err)
+				log.Fatalf("Failed to generate credentials: %v", err)
 			}
-			defer db.Close()
+			fmt.Printf("Access Key: %s\n", accessKey)
+			fmt.Printf("Secret Key: %s\n", secretKey)
 		},
 	}
 

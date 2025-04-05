@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ros-e/lumi/cmd"
+	"github.com/ros-e/lumi/core"
 	"github.com/spf13/cobra"
 )
 
@@ -15,8 +16,6 @@ type App struct {
 	cmd     *cobra.Command
 	Config  Config
 }
-
-const Version = "Alpha"
 
 type Config struct {
 	Port    string
@@ -56,7 +55,7 @@ func NewApp() *App {
 	rootCmd := &cobra.Command{
 		Use:     executableName,
 		Short:   "lumi CLI",
-		Version: Version,
+		Version: core.Version,
 	}
 	rootCmd.AddCommand(cmd.NewUpdateCMD())
 	rootCmd.AddCommand(cmd.NewServeCMD())

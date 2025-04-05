@@ -5,6 +5,8 @@ import (
 	"hash"
 	"net/http"
 	"time"
+
+	"github.com/ros-e/lumi/core"
 )
 
 const (
@@ -59,6 +61,7 @@ func (s *s3ChunkedReader) getChunkSignature() {
 // most of this is stolen from https://github.com/minio/minio/blob/b67f0cf72160263bba62664c8e9433132ebdddf0/cmd/streaming-signature-v4.go#L226
 type s3ChunkedReader struct {
 	SecretKey         string
+	cred              *core.Credentials
 	reader            *bufio.Reader
 	seedSignature     string
 	seedDate          time.Time
