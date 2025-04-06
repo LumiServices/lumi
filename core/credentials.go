@@ -35,8 +35,8 @@ func IsSecretKeyValid(secretKey string) bool {
 }
 
 const (
-	Default_Access_Key = "vultures2"       // <- change this lmfao
-	Default_Secret_Key = "used2shop@aldis" // <- change this lmfao (x2)
+	Default_Access_Key = "lumiadmin"
+	Default_Secret_Key = "lumiadmin"
 )
 
 type Credentials struct {

@@ -11,7 +11,7 @@ func TestGenerateACSKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to generate ACS key: %v", err)
 	}
-	fmt.Printf(key)
+	fmt.Print(key)
 }
 
 func TestGenerateSKey(t *testing.T) {
@@ -20,5 +20,5 @@ func TestGenerateSKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to generate S key: %v", err)
 	}
-	fmt.Printf(key)
+	fmt.Print(key)
 }
