@@ -125,7 +125,6 @@ func getCanonicalRequest(extractedSignedHeaders http.Header, payload, queryStr, 
 	return canonicalRequest
 }
 
-// Write sum here to describe this
 // algorithm(dont need this) AWS4-HMAC-SHA256
 // date 20130524T000000Z
 // scope 20130524/us-east-1/s3/aws4_request
