@@ -1,9 +1,20 @@
+// https://examplebucket.s3.amazonaws.com/test.txt
+// ?X-Amz-Algorithm=AWS4-HMAC-SHA256
+// &X-Amz-Credential=<your-access-key-id>/20130721/us-east-1/s3/aws4_request
+// &X-Amz-Date=20130721T201207Z
+// &X-Amz-Expires=86400
+// &X-Amz-SignedHeaders=host
+// &X-Amz-Signature=<signature-value>
 package s3
 
 import (
-	"bufio"
-	"hash"
+	"bytes"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/ros-e/lumi/core"
@@ -18,6 +29,12 @@ const (
 	streamingContentEncoding      = "aws-chunked"
 	awsTrailerHeader              = "X-Amz-Trailer"
 	trailerKVSeparator            = ":"
+)
+
+const (
+	signV4Algorithm = "AWS4-HMAC-SHA256"
+	iso8601Format   = "20060102T150405Z"
+	yyyymmdd        = "20060102"
 )
 
 type serviceType string
@@ -54,19 +71,94 @@ type signValues struct {
 	Signature     string
 }
 
-func (s *s3ChunkedReader) getChunkSignature() {
+// getCanonicalHeaders generate a list of request headers with their values
+func getCanonicalHeaders(signedHeaders http.Header) string {
+	var headers []string
+	vals := make(http.Header)
+	for k, vv := range signedHeaders {
+		headers = append(headers, strings.ToLower(k))
+		vals[strings.ToLower(k)] = vv
+	}
+	sort.Strings(headers)
 
+	var buf bytes.Buffer
+	for _, k := range headers {
+		buf.WriteString(k)
+		buf.WriteByte(':')
+		for idx, v := range vals[k] {
+			if idx > 0 {
+				buf.WriteByte(',')
+			}
+			buf.WriteString(core.SignV4TrimAll(v))
+		}
+		buf.WriteByte('\n')
+	}
+	return buf.String()
 }
 
-// most of this is stolen from https://github.com/minio/minio/blob/b67f0cf72160263bba62664c8e9433132ebdddf0/cmd/streaming-signature-v4.go#L226
-type s3ChunkedReader struct {
-	SecretKey         string
-	cred              *core.Credentials
-	reader            *bufio.Reader
-	seedSignature     string
-	seedDate          time.Time
-	region            string
-	trailers          http.Header
-	chunkSHA256Writer hash.Hash
-	buffer            []byte
+// getSignedHeaders generate a string i.e alphabetically sorted, semicolon-separated list of lowercase request header names
+func getSignedHeaders(signedHeaders http.Header) string {
+	var headers []string
+	for k := range signedHeaders {
+		headers = append(headers, strings.ToLower(k))
+	}
+	sort.Strings(headers)
+	return strings.Join(headers, ";")
+}
+
+// <HTTPMethod>\n
+// <CanonicalURI>\n
+// <CanonicalQueryString>\n
+// <CanonicalHeaders>\n
+// <SignedHeaders>\n
+// <HashedPayload>
+func getCanonicalRequest(extractedSignedHeaders http.Header, payload, queryStr, urlPath, method string) string {
+	query := strings.ReplaceAll(queryStr, "+", "%20")
+	canonicalRequest := strings.Join([]string{
+		method,
+		core.EncodePath(urlPath),
+		query,
+		getCanonicalHeaders(extractedSignedHeaders),
+		getSignedHeaders(extractedSignedHeaders),
+		payload,
+	}, "\n")
+	return canonicalRequest
+}
+
+// Write sum here to describe this
+// algorithm(dont need this) AWS4-HMAC-SHA256
+// date 20130524T000000Z
+// scope 20130524/us-east-1/s3/aws4_request
+// what the final hash should be 7344ae5b7ee6c3e7e6b0fe0640412a37625d1fbfff95c48bbb2dc43964946972
+func getStringToSign(CanonicalRequest string, date time.Time, region string, scope string) string {
+	stringToSign := signV4Algorithm + "\n" + date.Format(iso8601Format) + "\n"
+	stringToSign = stringToSign + scope + "\n"
+	CanonicalRequestBytes := sha256.Sum256([]byte(CanonicalRequest))
+	stringToSign = stringToSign + hex.EncodeToString(CanonicalRequestBytes[:])
+	return stringToSign
+}
+
+func getSigningKey(secretkey string, date time.Time, region string, service serviceType) []byte {
+	d := core.SumHMAC([]byte("AWS4"+secretkey), []byte(date.Format(yyyymmdd)))
+	regbytes := core.SumHMAC(d, []byte(region))
+	stype := core.SumHMAC(regbytes, []byte(service))
+	signingKey := core.SumHMAC(stype, []byte("aws4_request"))
+	return signingKey
+}
+
+func getSignature(signingKey []byte, stringToSign string) string {
+	return hex.EncodeToString(core.SumHMAC(signingKey, []byte(stringToSign)))
+}
+
+// compareSignatureV4 returns true if and only if both signatures
+// are equal. The signatures are expected to be HEX encoded strings
+// according to the AWS S3 signature V4 spec.
+func compareSignatureV4(sig1, sig2 string) bool {
+	// The CTC using []byte(str) works because the hex encoding
+	// is unique for a sequence of bytes. See also compareSignatureV2.
+	return subtle.ConstantTimeCompare([]byte(sig1), []byte(sig2)) == 1
+}
+
+func doesPreSignedSignatureMatch(payload string, r *http.Request, region string) {
+
 }

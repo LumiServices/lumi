@@ -12,10 +12,6 @@ import (
 
 var Version = "0"
 
-type Schema struct {
-	AccessKey string
-}
-
 // AccessKey //
 func GenerateACSKey(length int, random io.Reader) (string, error) {
 	if random == nil {
