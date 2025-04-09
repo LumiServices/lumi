@@ -2,7 +2,6 @@ package core
 
 import (
 	"database/sql"
-	"fmt"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -16,7 +15,5 @@ func ConnectDB() (*sql.DB, error) {
 		db.Close()
 		return nil, err
 	}
-
-	fmt.Println("Connected to SQLite database successfully")
 	return db, nil
 }
