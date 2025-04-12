@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -159,9 +160,44 @@ func compareSignatureV4(sig1, sig2 string) bool {
 	return subtle.ConstantTimeCompare([]byte(sig1), []byte(sig2)) == 1
 }
 
-func doesPreSignedSignatureMatch(payload string, r *http.Request, region string) {
+func doesPreSignedSignatureMatch(payload string, r *http.Request, region string) ErrorCode {
 	req := *r
+	pSignValues, err := parsePsignV4(req.Form)
+	if err != ErrNone {
+		return err
+	}
+	creds, _, ErrCode := checkAccessKey(r, pSignValues.Credential.accessKey)
+	if ErrCode != ErrNone {
+		return ErrInvalidAccessKeyID
+	}
 
+	extractedSignedHeaders, errCode := ExtractSignedHeaders(pSignValues.SignedHeaders, r)
+	if errCode != ErrNone {
+		return errCode
+	}
+	errMetaCode := checkMetaHeaders(extractedSignedHeaders, r)
+	if errMetaCode != ErrNone {
+		return errMetaCode
+	}
+	if pSignValues.Date.After(time.Now().UTC().Add(15 * time.Minute)) {
+		return ErrRequestNotReadyYet
+	}
+	if time.Now().UTC().Sub(pSignValues.Date) > pSignValues.Expires {
+		return ErrExpiredPresignRequest
+	}
+
+	date := pSignValues.Date
+	expireSeconds := int(pSignValues.Expires / time.Second)
+	query := make(url.Values)
+	clntHashedPayload := req.Header.Get("X-Amz-Content-Sha256")
+	if clntHashedPayload == "" {
+		query.Set("X-Amz-Content-Sha256", payload)
+	}
+	query.Set("X-Amz-Date", date.Format(iso8601Format))
+	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))
+	query.Set("X-Amz-SignedHeaders", getSignedHeaders(extractedSignedHeaders))
+	query.Set("X-Amz-Credential", creds.AccessKey+"/"+getScope(date, pSignValues.Credential.scope.region))
+	return ErrNone
 }
 
 type preSignValues struct {
@@ -178,6 +214,16 @@ func doesV4PresignParamsExist(query url.Values) ErrorCode {
 		}
 	}
 	return ErrNone
+}
+
+func getScope(t time.Time, region string) string {
+	scope := strings.Join([]string{
+		t.Format(yyyymmdd),
+		region,
+		"s3",
+		"aws4_request",
+	}, "/")
+	return scope
 }
 
 func parsePsignV4(query url.Values) (psv preSignValues, aec ErrorCode) {
@@ -199,4 +245,22 @@ func parsePsignV4(query url.Values) (psv preSignValues, aec ErrorCode) {
 
 func parseCredentialHeader(credStr string) (credentialHeader, ErrorCode) {
 	return credentialHeader{}, ErrNone //placeholder
+}
+
+func stringsHasPrefixFold(s, prefix string) bool {
+	return len(s) >= len(prefix) && (s[0:len(prefix)] == prefix || strings.EqualFold(s[0:len(prefix)], prefix))
+}
+
+func checkMetaHeaders(signedHeadersMap http.Header, r *http.Request) ErrorCode {
+	// check values from http header
+	for k, val := range r.Header {
+		if stringsHasPrefixFold(k, "X-Amz-Meta-") {
+			if signedHeadersMap.Get(k) == val[0] {
+				continue
+			}
+			return ErrUnsignedHeaders
+		}
+	}
+
+	return ErrNone
 }

@@ -78,18 +78,3 @@ func ExtractClaimstoken(token, secretKey string) (*jwt.MapClaims, error) {
 
 	return &claims, nil
 }
-
-// Retreives the Access Key from database
-func GetAccessKey() (string, error) {
-	db, err := ConnectDB()
-	if err != nil {
-		return "", err
-	}
-	defer db.Close()
-	var key string
-	row := db.QueryRow("SELECT accesskey FROM server WHERE id = ?")
-	if err := row.Scan(&key); err != nil {
-		return "", err
-	}
-	return key, nil
-}
