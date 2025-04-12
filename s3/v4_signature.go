@@ -13,6 +13,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -159,5 +160,43 @@ func compareSignatureV4(sig1, sig2 string) bool {
 }
 
 func doesPreSignedSignatureMatch(payload string, r *http.Request, region string) {
+	req := *r
 
+}
+
+type preSignValues struct {
+	signValues
+	Date    time.Time
+	Expires time.Duration
+}
+
+func doesV4PresignParamsExist(query url.Values) ErrorCode {
+	v4PresignQueryParams := []string{"X-Amz-Algorithm", "X-Amz-Credential", "X-Amz-Signature", "X-Amz-Date", "X-Amz-SignedHeaders", "X-Amz-Expires"}
+	for _, v4PresignQueryParam := range v4PresignQueryParams {
+		if _, ok := query[v4PresignQueryParam]; !ok {
+			return ErrInvalidQueryParams
+		}
+	}
+	return ErrNone
+}
+
+func parsePsignV4(query url.Values) (psv preSignValues, aec ErrorCode) {
+	var err ErrorCode
+	aec = doesV4PresignParamsExist(query)
+	if aec != ErrNone {
+		return psv, err
+	}
+	if query.Get("X-Amz-Algorithm") != signV4Algorithm {
+		return psv, ErrInvalidQuerySignatureAlgo
+	}
+	preSignV4Values := preSignValues{}
+	preSignV4Values.Credential, err = parseCredentialHeader("Credential=" + query.Get("X-Amz-Credential"))
+	if err != ErrNone {
+		return psv, err
+	}
+	return preSignV4Values, ErrNone
+}
+
+func parseCredentialHeader(credStr string) (credentialHeader, ErrorCode) {
+	return credentialHeader{}, ErrNone //placeholder
 }
