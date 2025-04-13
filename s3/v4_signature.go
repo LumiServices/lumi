@@ -67,6 +67,10 @@ type credentialHeader struct {
 	}
 }
 
+func (c credentialHeader) getScope() string {
+	panic("unimplemented")
+}
+
 type signValues struct {
 	Credential    credentialHeader
 	SignedHeaders []string
@@ -197,6 +201,48 @@ func doesPreSignedSignatureMatch(payload string, r *http.Request, region string)
 	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))
 	query.Set("X-Amz-SignedHeaders", getSignedHeaders(extractedSignedHeaders))
 	query.Set("X-Amz-Credential", creds.AccessKey+"/"+getScope(date, pSignValues.Credential.scope.region))
+	for k, v := range req.URL.Query() {
+		// Skip AWS S3 authentication headers
+		if _, ok := awsS3AuthHeaders[strings.ToLower(k)]; ok {
+			continue
+		}
+
+		query[k] = v
+	}
+	encodedQuery := query.Encode()
+	if req.URL.Query().Get("X-Amz-Date") != query.Get("X-Amz-Date") {
+		return ErrSignatureDoesNotMatch
+	}
+	if req.URL.Query().Get("X-Amz-Expires") != query.Get("X-Amz-Expires") {
+		return ErrSignatureDoesNotMatch
+	}
+	if req.URL.Query().Get("X-Amz-SignedHeaders") != query.Get("X-Amz-SignedHeaders") {
+		return ErrSignatureDoesNotMatch
+	}
+	if req.URL.Query().Get("X-Amz-Credential") != query.Get("X-Amz-Credential") {
+		return ErrSignatureDoesNotMatch
+	}
+	if req.URL.Query().Get("X-Amz-Content-Sha256") != "" {
+		if req.URL.Query().Get("X-Amz-Content-Sha256") != query.Get("X-Amz-Content-Sha256") {
+			return ErrContentSHA256Mismatch
+		}
+	}
+	presignedCanonicalReq := getCanonicalRequest(extractedSignedHeaders, payload, encodedQuery, req.URL.Path, req.Method)
+
+	// Get string to sign from canonical request.
+	presignedStringToSign := getStringToSign(presignedCanonicalReq, date, pSignValues.Credential.scope.region, pSignValues.Credential.getScope())
+
+	// Get hmac presigned signing key.
+	presignedSigningKey := getSigningKey(creds.SecretKey, pSignValues.Credential.scope.date,
+		pSignValues.Credential.scope.region, serviceS3)
+
+	// Get new signature.
+	newSignature := getSignature(presignedSigningKey, presignedStringToSign)
+
+	// Verify signature.
+	if !compareSignatureV4(req.URL.Query().Get("X-Amz-Signature"), newSignature) {
+		return ErrSignatureDoesNotMatch
+	}
 	return ErrNone
 }
 
