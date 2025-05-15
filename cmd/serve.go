@@ -6,21 +6,24 @@ import (
 )
 
 func NewServeCMD() *cobra.Command {
-	var addr string
+	var httpaddr string
 	var ShowStartBanner bool
 	var debug bool
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Start the server",
 		Run: func(cmd *cobra.Command, args []string) {
-			if addr == "" {
-				addr = "0.0.0.0:80"
+			if httpaddr == "" {
+				httpaddr = "0.0.0.0:2100"
 			}
-			api.Serve(addr, ShowStartBanner, debug)
+			api.Serve(
+				httpaddr,
+				ShowStartBanner,
+				debug)
 		},
 	}
 
-	cmd.Flags().StringVar(&addr, "http", "", "TCP address to listen for the HTTP server")
+	cmd.Flags().StringVar(&httpaddr, "http", "", "TCP address to listen for the HTTP server")
 	cmd.Flags().BoolVar(&ShowStartBanner, "ShowStartBanner", true, "Hide the start banner")
 	cmd.Flags().BoolVar(&debug, "debug", false, "Enable debug mode")
 

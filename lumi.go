@@ -42,14 +42,14 @@ func NewApp() *App {
 	if err := os.MkdirAll(config.DataDir, os.ModePerm); err != nil {
 		log.Fatalf("failed to create data directory: %v", err)
 	}
-	dbPath := filepath.Join("lumi.db")
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		file, err := os.Create(dbPath)
-		if err != nil {
-			log.Fatalf("failed to create db: %v", err)
-		}
-		file.Close()
-	}
+	// dbPath := filepath.Join("lumi.db")
+	// if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+	// 	file, err := os.Create(dbPath)
+	// 	if err != nil {
+	// 		log.Fatalf("failed to create db: %v", err)
+	// 	}
+	// 	file.Close()
+	// }
 
 	executableName := filepath.Base(os.Args[0])
 	rootCmd := &cobra.Command{
@@ -59,13 +59,12 @@ func NewApp() *App {
 	}
 	rootCmd.AddCommand(cmd.NewUpdateCMD())
 	rootCmd.AddCommand(cmd.NewServeCMD())
-	rootCmd.AddCommand(cmd.NewGenerateCMD())
-	rootCmd.PersistentFlags().StringVar(
-		&config.DataDir,
-		"dir",
-		config.DataDir,
-		"the lumi data directory",
-	)
+	// rootCmd.PersistentFlags().StringVar(
+	// 	&config.DataDir,
+	// 	"dir",
+	// 	config.DataDir,
+	// 	"the lumi data directory",
+	// )
 	return &App{
 		cmd: rootCmd,
 		Config: Config{

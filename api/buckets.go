@@ -3,21 +3,20 @@ package api
 import (
 	"encoding/xml"
 	"net/http"
-	"strconv"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ros-e/lumi/s3"
 )
 
-//ALL EXAMPLE DATA FOR NOW
-
+// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
 type Bucket struct {
 	XMLName     xml.Name `xml:"ListBucketResult"`
 	Xmlns       string   `xml:"Xmlns"`
 	Name        string   `xml:"Name"`
-	Prefix      string   `xml:"Prefix"`
-	KeyCount    int      `xml:"KeyCount"`
-	MaxKeys     int      `xml:"MaxKeys"`
 	IsTruncated bool     `xml:"IsTruncated"`
 	Contents    []Object `xml:"Contents"`
 }
@@ -32,42 +31,56 @@ type Object struct {
 }
 
 func ListObjectsV2Handler(c *gin.Context) {
-	bucket := c.Param("bucket")
-	if bucket == "" {
-		c.XML(http.StatusBadRequest, gin.H{"error": "Bucket name is required"})
-		return
-	}
+	//check if the bucket path in /data exists
 	prefix := c.DefaultQuery("prefix", "")
-	maxKeysStr := c.DefaultQuery("max-keys", "1000")
-	maxKeys, err := strconv.Atoi(maxKeysStr)
-	if err != nil || maxKeys < 1 {
-		c.XML(http.StatusBadRequest, gin.H{"error": "Invalid max-keys value"})
+	bucketdir := filepath.Join("data", c.Param("bucket"))
+	info, err := os.Stat(bucketdir)
+	if os.IsNotExist(err) || !info.IsDir() {
+		WriteErrorResponse(c, s3.ErrNoSuchBucket, c.Param("bucket"))
+	}
+	//contents of bucket
+	entries, err := os.ReadDir(bucketdir)
+	if err != nil {
+		WriteErrorResponse(c, s3.ErrInternalError, "Could not read bucket directory")
 		return
 	}
-
-	var sampleObjects = []Object{
-		{Key: "file1.txt", LastModified: "2024-03-22T10:00:00Z", Size: 1234, ETag: `"fba9dede5f27731c9771645a39863328"`, StorageClass: "STANDARD"},
-		{Key: "file2.txt", LastModified: "2024-03-21T09:00:00Z", Size: 5678, ETag: `"fba9dede5f27731c9771645a39863328"`, StorageClass: "STANDARD"},
-		{Key: "folder/file3.txt", LastModified: "2024-03-20T08:00:00Z", Size: 91011, ETag: `"fba9dede5f27731c9771645a39863328"`, StorageClass: "STANDARD"},
-	}
-	var filteredObjects []Object
-	for _, obj := range sampleObjects {
-		if prefix == "" || strings.HasPrefix(obj.Key, prefix) {
-			filteredObjects = append(filteredObjects, obj)
+	var contents []Object
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, prefix) {
+			info, _ := entry.Info()
+			contents = append(contents, Object{
+				Key:          name,
+				LastModified: info.ModTime().Format(time.RFC3339),
+				Size:         info.Size(),
+			})
 		}
-	}
-	if len(filteredObjects) > maxKeys {
-		filteredObjects = filteredObjects[:maxKeys]
 	}
 
 	response := Bucket{
 		Xmlns:       "http://s3.amazonaws.com/doc/2006-03-01/",
-		Name:        bucket,
-		Prefix:      prefix,
-		KeyCount:    len(filteredObjects),
-		MaxKeys:     maxKeys,
-		IsTruncated: len(filteredObjects) > maxKeys,
-		Contents:    filteredObjects,
+		Name:        c.Param("bucket"),
+		IsTruncated: false,
+		Contents:    contents,
 	}
 	c.XML(http.StatusOK, response)
+}
+
+func CreateBucketCommand(c *gin.Context) {
+	//get bucket name from url
+	bucketname := c.Param("bucket")
+	if _, err := os.Stat(bucketname); err == nil {
+		WriteErrorResponse(c, s3.ErrBucketAlreadyExists, "Bucket already exists")
+		return
+	} else if !os.IsNotExist(err) {
+		WriteErrorResponse(c, s3.ErrInternalError, "Failed to check bucket status")
+		return
+	}
+	//make folder in /data
+	if err := os.MkdirAll(filepath.Join("data", bucketname), 0755); err != nil {
+		WriteErrorResponse(c, s3.ErrInternalError, "Failed to create bucket")
+		return
+	}
+	c.Header("Location", c.Param("bucket"))
+	c.String(200, "Location: %s", c.Param("bucket"))
 }

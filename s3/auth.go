@@ -1,30 +1,34 @@
 package s3
 
 import (
-	"database/sql"
 	"net/http"
-
-	"github.com/ros-e/lumi/core"
+	"os"
+	"strings"
 )
 
-func checkAccessKey(req *http.Request, accesskey string) (core.Credentials, bool, ErrorCode) {
-	// Placeholder until IAM is implemented
-	db, err := core.ConnectDB()
-	if err != nil {
-		return core.Credentials{}, false, ErrNotImplemented
+// VERY VERY VERY VERYYYY BASIC
+func AuthenticateRequest(r *http.Header) ErrorCode {
+	authHead := r.Get("Authorization")
+	if authHead == "" {
+		return ErrMissingCredTag
 	}
-	defer db.Close()
+	credentialheader := strings.Split(authHead, "Credential=")
+	if len(credentialheader) < 2 {
+		return ErrCredMalformed
+	}
+	accessKeyHeader := strings.Split(credentialheader[1], "/")
+	if len(accessKeyHeader) < 1 {
+		return ErrCredMalformed
+	}
+	accessKey := accessKeyHeader[0]
 
-	var key string
-	row := db.QueryRow("SELECT accesskey FROM server WHERE accesskey = ?", accesskey)
-	if err := row.Scan(&key); err != nil {
-		if err == sql.ErrNoRows {
-			return core.Credentials{}, false, ErrInvalidAccessKeyID
-		}
-		return core.Credentials{}, false, ErrNotImplemented
+	expectedKey := os.Getenv("lumi_access_key")
+	if expectedKey == "" {
+		return ErrAuthNotSetup
 	}
-	creds := core.Credentials{
-		AccessKey: key,
+
+	if accessKey != expectedKey {
+		return ErrInvalidAccessKeyID
 	}
-	return creds, true, ErrNone
+	return ErrNone
 }
