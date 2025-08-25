@@ -1,4 +1,4 @@
-# LUMI (unstable)
+# LUMI (beta)
 
 Download for [**Windows**](https://github.com/ros-e/lumi/releases)
 Download for [**macOS**](https://github.com/ros-e/lumi/releases)
