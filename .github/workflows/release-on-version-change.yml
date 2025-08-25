@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'core/app.go'
+  workflow_dispatch:
 jobs:
   release:
     runs-on: ubuntu-latest
