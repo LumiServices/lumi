@@ -17,8 +17,6 @@ jobs:
         run: |
           old_version=$(git show ${{ steps.prev.outputs.previous_sha }}:core/app.go | grep 'var Version' | cut -d'"' -f2 || echo "")
           new_version=$(grep 'var Version' core/app.go | cut -d'"' -f2 || echo "")
-          echo "Old version: $old_version"
-          echo "New version: $new_version"
           echo "old_version=$old_version" >> $GITHUB_OUTPUT
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
       - name: Check if release exists
@@ -26,26 +24,36 @@ jobs:
         run: |
           tag="${{ steps.extract_version.outputs.new_version }}"
           if [ -z "$tag" ]; then
-            echo "No new version, skipping"
             echo "exists=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-          response=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag")
+          response=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag")
           if [ "$response" = "200" ]; then
-            echo "Release $tag already exists"
             echo "exists=true" >> $GITHUB_OUTPUT
           else
-            echo "Release $tag does not exist"
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
+      - name: Build project
+        if: ${{ steps.extract_version.outputs.old_version != steps.extract_version.outputs.new_version }}
+        run: |
+          mkdir -p build
+          GOOS=darwin GOARCH=arm64 go build -o build/lumi-mac-arm64 bin/main.go
+          GOOS=windows GOARCH=amd64 go build -o build/lumi-windows-amd64.exe bin/main.go
+          GOOS=linux GOARCH=amd64 go build -o build/lumi-linux-amd64 bin/main.go
       - name: Create GitHub Release if version changed and release doesn't exist
         if: ${{ steps.extract_version.outputs.old_version != steps.extract_version.outputs.new_version && steps.check_release.outputs.exists == 'false' }}
+        id: create_release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.extract_version.outputs.new_version }}
           name: Release ${{ steps.extract_version.outputs.new_version }}
-          body: "Auto-generated release for version ${{ steps.extract_version.outputs.new_version }}"
+          body: Auto-generated release for version ${{ steps.extract_version.outputs.new_version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      - name: Upload release assets
+        if: ${{ steps.extract_version.outputs.old_version != steps.extract_version.outputs.new_version && steps.check_release.outputs.exists == 'false' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/lumi-mac-arm64,build/lumi-windows-amd64.exe,build/lumi-linux-amd64
         env:
           GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
