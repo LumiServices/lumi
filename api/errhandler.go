@@ -11,7 +11,7 @@ func WriteErrorResponse(c *gin.Context, errorCode s3.ErrorCode, resource string)
 		Code:       apiErr.Code,
 		Message:    apiErr.Description,
 		Resource:   resource,
-		RequestID:  c.GetHeader("X-Amz-Request-Id"), // Include request ID if available
+		RequestID:  c.GetHeader("X-Amz-Request-Id"),
 		BucketName: c.Param("bucket"),
 		StatusCode: apiErr.HTTPStatusCode,
 	}

@@ -6,7 +6,6 @@ import (
 	"strings"
 )
 
-// VERY VERY VERY VERYYYY BASIC
 func AuthenticateRequest(r *http.Header) ErrorCode {
 	authHead := r.Get("Authorization")
 	if authHead == "" {

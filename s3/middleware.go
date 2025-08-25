@@ -14,7 +14,7 @@ func S3AuthMiddleware() gin.HandlerFunc {
 				Message:    apiErr.Description,
 				StatusCode: apiErr.HTTPStatusCode,
 				Resource:   c.Request.URL.Path,
-				RequestID:  c.GetHeader("X-Amz-Request-Id"), // Include request ID if available
+				RequestID:  c.GetHeader("X-Amz-Request-Id"),
 			}
 			c.XML(apiErr.HTTPStatusCode, errResp)
 			c.Abort()
