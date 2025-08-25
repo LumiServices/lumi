@@ -22,8 +22,28 @@ jobs:
           echo "New version: $new_version"
           echo "old_version=$old_version" >> $GITHUB_OUTPUT
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
-      - name: Create GitHub Release if version changed
-        if: ${{ steps.extract_version.outputs.old_version != steps.extract_version.outputs.new_version && steps.extract_version.outputs.new_version != '' }}
+      - name: Check if release exists
+        id: check_release
+        run: |
+          tag="${{ steps.extract_version.outputs.new_version }}"
+          if [ -z "$tag" ]; then
+            echo "No new version, skipping"
+            echo "exists=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag")
+
+          if [ "$response" = "200" ]; then
+            echo "Release $tag already exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Release $tag does not exist"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Create GitHub Release if version changed and release doesn't exist
+        if: ${{ steps.extract_version.outputs.old_version != steps.extract_version.outputs.new_version && steps.check_release.outputs.exists == 'false' }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.extract_version.outputs.new_version }}
