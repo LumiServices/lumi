@@ -1,5 +1,4 @@
 name: Release on Version Change
-
 on:
   push:
     paths:
@@ -32,9 +31,8 @@ jobs:
             exit 0
           fi
           response=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag")
-
           if [ "$response" = "200" ]; then
             echo "Release $tag already exists"
             echo "exists=true" >> $GITHUB_OUTPUT
@@ -50,4 +48,4 @@ jobs:
           name: Release ${{ steps.extract_version.outputs.new_version }}
           body: "Auto-generated release for version ${{ steps.extract_version.outputs.new_version }}"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
