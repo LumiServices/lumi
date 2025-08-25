@@ -30,8 +30,20 @@ jobs:
       - name: Extract old and new version
         id: extract_version
         run: |
-          old_version=$(git show ${{ steps.prev.outputs.previous_sha }}:core/app.go | grep 'var Version' | cut -d'"' -f2 || echo "")
-          new_version=$(grep 'var Version' core/app.go | cut -d'"' -f2 || echo "")
+          echo "=== Debugging version extraction ==="
+          echo "Current core/app.go content:"
+          cat core/app.go | head -20
+          echo ""
+          echo "Previous core/app.go content:"
+          git show ${{ steps.prev.outputs.previous_sha }}:core/app.go | head -20
+          echo ""
+          
+          old_version=$(git show ${{ steps.prev.outputs.previous_sha }}:core/app.go | grep -E 'var Version|Version.*=' | head -1 | sed -n 's/.*["`'"'"']\([^"`'"'"']*\)["`'"'"'].*/\1/p' || echo "")
+          new_version=$(cat core/app.go | grep -E 'var Version|Version.*=' | head -1 | sed -n 's/.*["`'"'"']\([^"`'"'"']*\)["`'"'"'].*/\1/p' || echo "")
+          
+          echo "Extracted old_version: '$old_version'"
+          echo "Extracted new_version: '$new_version'"
+          
           echo "old_version=$old_version" >> $GITHUB_OUTPUT
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
           
