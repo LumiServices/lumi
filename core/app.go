@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-var Version = "unstable-0-0-1"
+var Version = "beta-0.0.1"
 
 func GetLatestGitHubRelease() (string, error) {
 	url := "https://api.github.com/repos/ros-e/lumi/releases/latest"

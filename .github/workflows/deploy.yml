@@ -1,0 +1,33 @@
+name: Release on Version Change
+
+on:
+  push:
+    paths:
+      - 'core/app.go'
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Get previous commit SHA
+        id: prev
+        run: echo "previous_sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+      - name: Extract old and new version
+        id: extract_version
+        run: |
+          old_version=$(git show ${{ steps.prev.outputs.previous_sha }}:core/app.go | grep 'var Version' | cut -d'"' -f2 || echo "")
+          new_version=$(grep 'var Version' core/app.go | cut -d'"' -f2 || echo "")
+          echo "Old version: $old_version"
+          echo "New version: $new_version"
+          echo "old_version=$old_version" >> $GITHUB_OUTPUT
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+      - name: Create GitHub Release if version changed
+        if: ${{ steps.extract_version.outputs.old_version != steps.extract_version.outputs.new_version && steps.extract_version.outputs.new_version != '' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.extract_version.outputs.new_version }}
+          name: Release ${{ steps.extract_version.outputs.new_version }}
+          body: "Auto-generated release for version ${{ steps.extract_version.outputs.new_version }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

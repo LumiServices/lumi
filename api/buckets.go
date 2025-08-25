@@ -67,20 +67,22 @@ func ListObjectsV2Handler(c *gin.Context) {
 }
 
 func CreateBucketCommand(c *gin.Context) {
-	//get bucket name from url
 	bucketname := c.Param("bucket")
-	if _, err := os.Stat(bucketname); err == nil {
+	bucketpath := filepath.Join("data", bucketname)
+
+	if _, err := os.Stat(bucketpath); err == nil {
 		WriteErrorResponse(c, s3.ErrBucketAlreadyExists, "Bucket already exists")
 		return
 	} else if !os.IsNotExist(err) {
 		WriteErrorResponse(c, s3.ErrInternalError, "Failed to check bucket status")
 		return
 	}
-	//make folder in /data
-	if err := os.MkdirAll(filepath.Join("data", bucketname), 0755); err != nil {
+
+	if err := os.MkdirAll(bucketpath, 0755); err != nil {
 		WriteErrorResponse(c, s3.ErrInternalError, "Failed to create bucket")
 		return
 	}
-	c.Header("Location", c.Param("bucket"))
-	c.String(200, "Location: %s", c.Param("bucket"))
+
+	c.Header("Location", "/"+bucketname)
+	c.Status(http.StatusCreated)
 }

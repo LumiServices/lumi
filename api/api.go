@@ -18,7 +18,8 @@ func Serve(addr string, startbanner bool, debug bool) {
 	r.GET("/:bucket/*key", GetObject)
 	r.DELETE("/:bucket/*key", s3.S3AuthMiddleware(), DeleteObject)
 	r.GET("/:bucket", s3.S3AuthMiddleware(), ListObjectsV2Handler)
-	r.PUT("/:bucket/*key", PutObject)
+	r.PUT("/:bucket/*key", s3.S3AuthMiddleware(), PutObject)
+	r.PUT("/:bucket", s3.S3AuthMiddleware(), CreateBucketCommand)
 
 	if err := r.Run(addr); err != nil {
 		fmt.Printf("\033[31m[ERROR] \033[0mError starting the server: %v\n", err)
