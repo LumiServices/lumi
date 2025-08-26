@@ -1,11 +1,12 @@
 package api
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ros-e/lumi/s3"
@@ -51,8 +52,24 @@ func PutObject(c *gin.Context) {
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
+	contentDisposition := c.GetHeader("Content-Disposition")
+	meta := ObjectMetadata{
+		ContentType:        contentType,
+		ContentDisposition: contentDisposition,
+		Size:               size,
+	}
+	metaBytes, err := json.Marshal(meta)
+	if err != nil {
+		WriteErrorResponse(c, s3.ErrInternalError, err.Error())
+		return
+	}
+	err = os.WriteFile(objectpath+".meta", metaBytes, 0644)
+	if err != nil {
+		WriteErrorResponse(c, s3.ErrInternalError, err.Error())
+		return
+	}
 	c.Header("ETag", `"`+objectkey+`"`)
-	c.Header("Content-Length", string(rune(size)))
+	c.Header("Content-Length", strconv.FormatInt(size, 10))
 	c.Status(http.StatusOK)
 }
 
@@ -106,20 +123,22 @@ func GetObject(c *gin.Context) {
 		WriteErrorResponse(c, s3.ErrInternalError, err.Error())
 		return
 	}
-
-	contentType := http.DetectContentType(data)
-
-	var contentDisposition string
-	if strings.HasPrefix(contentType, "image/") ||
-		strings.HasPrefix(contentType, "text/") ||
-		contentType == "application/pdf" ||
-		strings.HasPrefix(contentType, "video/") ||
-		strings.HasPrefix(contentType, "audio/") {
-		contentDisposition = "inline"
+	meta := ObjectMetadata{}
+	metaPath := objectpath + ".meta"
+	metaBytes, err := os.ReadFile(metaPath)
+	if err == nil {
+		json.Unmarshal(metaBytes, &meta)
 	} else {
-		contentDisposition = "attachment; filename=\"" + filepath.Base(objectkey) + "\""
+		meta.ContentType = http.DetectContentType(data)
+	}
+	contentType := meta.ContentType
+	if contentType == "" {
+		contentType = http.DetectContentType(data)
+	}
+	c.Header("Content-Type", contentType)
+	if meta.ContentDisposition != "" {
+		c.Header("Content-Disposition", meta.ContentDisposition)
 	}
 
-	c.Header("Content-Disposition", contentDisposition)
 	c.Data(http.StatusOK, contentType, data)
 }
