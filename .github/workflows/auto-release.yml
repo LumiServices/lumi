@@ -127,17 +127,44 @@ jobs:
         with:
           path: release-artifacts
 
+      - name: Debug and flatten artifacts
+        run: |
+          echo "=== Original artifact structure ==="
+          find release-artifacts -type f -ls
+          echo "=== Flattening artifacts ==="
+          mkdir -p flattened-artifacts
+          find release-artifacts -type f -exec cp {} flattened-artifacts/ \;
+          echo "=== Flattened structure ==="
+          ls -la flattened-artifacts/
+
       - name: Create git tag
         run: |
           tag="${{ needs.check-version.outputs.new-version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$tag" -m "Release version $tag"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-          git push origin "$tag"
+          
+          # Check if tag already exists
+          if git tag -l | grep -q "^$tag$"; then
+            echo "Tag $tag already exists"
+          else
+            git tag -a "$tag" -m "Release version $tag"
+            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+            git push origin "$tag"
+            echo "Created and pushed tag $tag"
+          fi
 
-      - name: Wait for tag to propagate (optional but helpful)
-        run: sleep 5
+      - name: Wait for tag to propagate
+        run: sleep 10
+
+      - name: Verify tag exists
+        run: |
+          tag="${{ needs.check-version.outputs.new-version }}"
+          if git ls-remote --tags origin | grep -q "refs/tags/$tag$"; then
+            echo "✅ Tag $tag exists on remote"
+          else
+            echo "❌ Tag $tag not found on remote"
+            exit 1
+          fi
 
       - name: Check if release already exists
         id: check_release
@@ -175,8 +202,10 @@ jobs:
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (Primary Method)
         if: steps.check_release.outputs.exists == 'false'
+        id: create_release_primary
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.check-version.outputs.new-version }}
@@ -184,8 +213,40 @@ jobs:
           body: ${{ steps.release_notes.outputs.notes }}
           draft: false
           prerelease: ${{ contains(needs.check-version.outputs.new-version, 'beta') || contains(needs.check-version.outputs.new-version, 'alpha') || contains(needs.check-version.outputs.new-version, 'rc') }}
-          files: |
-            release-artifacts/**/*
+          files: flattened-artifacts/*
           fail_on_unmatched_files: true
+          token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release (Fallback with CLI)
+        if: steps.check_release.outputs.exists == 'false' && steps.create_release_primary.outcome == 'failure'
+        run: |
+          tag="${{ needs.check-version.outputs.new-version }}"
+          
+          # Determine if it's a prerelease
+          prerelease_flag=""
+          if [[ "$tag" == *"beta"* ]] || [[ "$tag" == *"alpha"* ]] || [[ "$tag" == *"rc"* ]]; then
+            prerelease_flag="--prerelease"
+          fi
+          
+          # Create release with GitHub CLI
+          gh release create "$tag" \
+            --title "Release $tag" \
+            $prerelease_flag \
+            flattened-artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Workflow summary
+        if: always()
+        run: |
+          echo "## Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Version**: ${{ needs.check-version.outputs.new-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version Changed**: ${{ needs.check-version.outputs.version-changed }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.check-version.outputs.version-changed }}" = "true" ]; then
+            echo "- **Tag Created**: ✅" >> $GITHUB_STEP_SUMMARY
+            echo "- **Release Method**: ${{ steps.create_release_primary.outcome == 'success' && 'Action' || 'CLI Fallback' }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Action**: No release created (no version change)" >> $GITHUB_STEP_SUMMARY
+          fi
