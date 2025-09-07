@@ -14,6 +14,7 @@ pub async fn start_server(port: u64, show_start_banner: bool) {
          .route("/{bucket}", get(list_objects_v2_handler))
         .layer(middleware::from_fn(s3_auth_middleware))
          .route("/{bucket}/{*key}", get(get_object_handler));
+        use tower_http::cors::{CorsLayer, Any};
     
     let addr = format!("0.0.0.0:{}", port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
