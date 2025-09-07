@@ -21,4 +21,11 @@ openssl rand -hex 10
 ```
 
 ## Star History
-[![Star History Chart](https://api.star-history.com/svg?repos=ros-e/lumi&type=Date)](https://www.star-history.com/#ros-e/lumi&Date)
+
+<a href="https://www.star-history.com/#ros-e/lumi&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ros-e/lumi&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ros-e/lumi&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ros-e/lumi&type=Date" />
+ </picture>
+</a>
