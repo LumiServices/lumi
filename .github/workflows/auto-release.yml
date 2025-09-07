@@ -1,0 +1,149 @@
+name: Auto Release on Version Change
+
+on:
+  push:
+    branches: [ main, master ]
+    paths: [ 'src/core/app.rs' ]
+  pull_request:
+    branches: [ main, master ]
+    paths: [ 'src/core/app.rs' ]
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version-changed: ${{ steps.version-check.outputs.changed }}
+      new-version: ${{ steps.version-check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      
+      - name: Check if version changed
+        id: version-check
+        run: |
+          # Extract current version
+          CURRENT_VERSION=$(grep 'pub const VERSION:' src/core/app.rs | sed 's/.*"\(.*\)".*/\1/')
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Check if this is a PR
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "This is a PR, skipping release"
+            exit 0
+          fi
+          
+          # Get previous version from the parent commit
+          git checkout HEAD~1 -- src/core/app.rs 2>/dev/null || echo "No previous version found"
+          if [ -f src/core/app.rs ]; then
+            PREVIOUS_VERSION=$(grep 'pub const VERSION:' src/core/app.rs | sed 's/.*"\(.*\)".*/\1/')
+            git checkout HEAD -- src/core/app.rs
+          else
+            PREVIOUS_VERSION=""
+          fi
+          
+          echo "Previous version: $PREVIOUS_VERSION"
+          
+          if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ] && [ "$CURRENT_VERSION" != "" ]; then
+            echo "Version changed from $PREVIOUS_VERSION to $CURRENT_VERSION"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "Version unchanged"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-and-release:
+    needs: check-version
+    if: needs.check-version.outputs.version-changed == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            suffix: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            suffix: ".exe"
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            suffix: ""
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            suffix: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+      
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+      
+      - name: Get binary name
+        id: binary-name
+        shell: bash
+        run: |
+          # Try to get binary name from Cargo.toml, fallback to repo name
+          if [ -f Cargo.toml ]; then
+            BINARY_NAME=$(grep '^name = ' Cargo.toml | head -1 | sed 's/name = "\(.*\)"/\1/')
+          else
+            BINARY_NAME="${{ github.event.repository.name }}"
+          fi
+          echo "name=$BINARY_NAME" >> $GITHUB_OUTPUT
+      
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          BINARY_NAME="${{ steps.binary-name.outputs.name }}"
+          ARTIFACT_NAME="${BINARY_NAME}-${{ needs.check-version.outputs.new-version }}-${{ matrix.target }}"
+          
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            cp "target/${{ matrix.target }}/release/${BINARY_NAME}.exe" "artifacts/${ARTIFACT_NAME}.exe"
+          else
+            cp "target/${{ matrix.target }}/release/${BINARY_NAME}" "artifacts/${ARTIFACT_NAME}"
+          fi
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.binary-name.outputs.name }}-${{ matrix.target }}
+          path: artifacts/*
+
+  create-release:
+    needs: [check-version, build-and-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.check-version.outputs.new-version }}
+          name: Release ${{ needs.check-version.outputs.new-version }}
+          draft: false
+          prerelease: ${{ contains(needs.check-version.outputs.new-version, 'beta') || contains(needs.check-version.outputs.new-version, 'alpha') || contains(needs.check-version.outputs.new-version, 'rc') }}
+          files: |
+            release-artifacts/**/*
+          body: |
+            ### Downloads
+            - **Linux (x64)**: Download the `x86_64-unknown-linux-gnu` binary
+            - **Windows (x64)**: Download the `x86_64-pc-windows-msvc.exe` binary  
+            - **macOS (Intel)**: Download the `x86_64-apple-darwin` binary
+            - **macOS (Apple Silicon)**: Download the `aarch64-apple-darwin` binary
+            
+            ### Installation
+            1. Download the appropriate binary for your platform
+            2. Make it executable (Linux/macOS): `chmod +x <binary-name>`
+            3. Optionally move to a directory in your PATH
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

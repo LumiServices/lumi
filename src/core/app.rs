@@ -1,7 +1,7 @@
 use reqwest::blocking::Client;
 use serde::Deserialize;
 use std::error::Error;
-pub const VERSION: &str = "beta-0.0.1-patch_1.1";
+pub const VERSION: &str = "beta-0.0-0_unstable";
 #[derive(Deserialize)]
 struct Release {
     tag_name: String,
