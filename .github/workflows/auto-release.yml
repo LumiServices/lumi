@@ -1,5 +1,9 @@
 name: Auto Release on Version Change
 
+permissions:
+  contents: write
+  packages: write
+  
 on:
   push:
     branches: [ main, master ]
@@ -7,10 +11,6 @@ on:
   pull_request:
     branches: [ main, master ]
     paths: [ 'src/core/app.rs' ]
-
-permissions:
-  contents: write
-  packages: write
 
 jobs:
   check-version:
