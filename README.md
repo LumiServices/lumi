@@ -19,3 +19,6 @@ We reccomend using a random hex
 ```sh
 openssl rand -hex 10
 ```
+
+## Star History
+[![Star History Chart](https://api.star-history.com/svg?repos=ros-e/lumi&type=Date)](https://www.star-history.com/#ros-e/lumi&Date)
