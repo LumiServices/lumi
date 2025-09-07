@@ -8,10 +8,6 @@ on:
     branches: [ main, master ]
     paths: [ 'src/core/app.rs' ]
 
-permissions:
-  contents: write
-  packages: write
-
 jobs:
   check-version:
     runs-on: ubuntu-latest
@@ -123,31 +119,71 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-artifacts
       
+      - name: Check if release exists
+        id: check_release
+        run: |
+          tag="${{ needs.check-version.outputs.new-version }}"
+          if [ -z "$tag" ]; then
+            echo "exists=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag")
+          if [ "$response" = "200" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create git tag
+        run: |
+          tag="${{ needs.check-version.outputs.new-version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Release version $tag"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git push origin "$tag"
+      
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          tag="${{ needs.check-version.outputs.new-version }}"
+          echo "- **Linux (x64)**: Download the \`x86_64-unknown-linux-gnu\` binary" >> release_notes.md
+          echo "- **Windows (x64)**: Download the \`x86_64-pc-windows-msvc.exe\` binary" >> release_notes.md
+          echo "- **macOS (Intel)**: Download the \`x86_64-apple-darwin\` binary" >> release_notes.md
+          echo "- **macOS (Apple Silicon)**: Download the \`aarch64-apple-darwin\` binary" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "### Installation" >> release_notes.md
+          echo "1. Download the appropriate binary for your platform" >> release_notes.md
+          echo "2. Make it executable (Linux/macOS): \`chmod +x <binary-name>\`" >> release_notes.md
+          echo "3. Optionally move to a directory in your PATH" >> release_notes.md
+          {
+            echo "notes<<EOF"
+            cat release_notes.md
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+      
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        if: steps.check_release.outputs.exists == 'false' || steps.check_release.outputs.exists == ''
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.check-version.outputs.new-version }}
-          name: Release ${{ needs.check-version.outputs.new-version }}
+          name: "Release ${{ needs.check-version.outputs.new-version }}"
           draft: false
           prerelease: ${{ contains(needs.check-version.outputs.new-version, 'beta') || contains(needs.check-version.outputs.new-version, 'alpha') || contains(needs.check-version.outputs.new-version, 'rc') }}
           files: |
             release-artifacts/**/*
-          body: |
-            ### Downloads
-            - **Linux (x64)**: Download the `x86_64-unknown-linux-gnu` binary
-            - **Windows (x64)**: Download the `x86_64-pc-windows-msvc.exe` binary  
-            - **macOS (Intel)**: Download the `x86_64-apple-darwin` binary
-            - **macOS (Apple Silicon)**: Download the `aarch64-apple-darwin` binary
-            
-            ### Installation
-            1. Download the appropriate binary for your platform
-            2. Make it executable (Linux/macOS): `chmod +x <binary-name>`
-            3. Optionally move to a directory in your PATH
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
