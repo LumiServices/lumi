@@ -1,3 +1,5 @@
+use std::{fs::create_dir};
+
 use clap::{Parser, Subcommand};
 use colored::*;
 use lumi::{api, core::{self, app::get_latest_github_release}, s3::credentials::{generate_access_key, generate_secret_key}};
@@ -26,11 +28,20 @@ enum Commands {
     },
 }
 
-fn main() {
+fn main() -> std::io::Result<()> {
+    //create data directory if it doesnt already exist
+    create_dir("./data").or_else(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            Ok(())
+        } else {
+            Err(e)
+        }
+    })?;
     let args = Args::parse();
     match args.command {
         Commands::Serve { port, hide_banner } => {
             api::server::start_server(port, !hide_banner);
+            Ok(())
         }
         Commands::Update => {
             println!("{}", "Checking for updates...".yellow());
@@ -58,6 +69,7 @@ fn main() {
                     );
                 }
             }
+            Ok(())
         }
         Commands::GenerateCredentials { access_key_length, secret_key_length } => {
             match generate_access_key(Some(access_key_length)) {
@@ -67,6 +79,7 @@ fn main() {
                             println!("Access Key: {}", access_key.bright_blue());
                             println!("Secret Key: {}", secret_key.bright_blue());
                             println!("\n{}", "Store these credentials securely!".yellow());
+                            Ok(())
                         }
                         Err(e) => {
                             eprintln!("{}", format!("Failed to generate secret key: {}", e).red());

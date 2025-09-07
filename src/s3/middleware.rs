@@ -3,79 +3,72 @@ use axum::{
     http::{header, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
-    Json,
+    body::Body,
 };
-use serde::Serialize;
 use std::env;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ErrorCode {
-    ErrNone,
-    ErrMissingCredTag,
-    ErrCredMalformed,
-    ErrAuthNotSetup,
-    ErrInvalidAccessKeyID,
-}
-
-#[derive(Serialize)]
-struct ErrorResponse {
-    error: &'static str,
-}
-
+use crate::s3::errors::{ErrorCode, create_error_response};
+use crate::core::xml::xml_response;
+use crate::s3::generate_request_id;
 impl IntoResponse for ErrorCode {
     fn into_response(self) -> Response {
-        let (status, message) = match self {
-            ErrorCode::ErrNone => return StatusCode::OK.into_response(),
-            ErrorCode::ErrMissingCredTag => (StatusCode::UNAUTHORIZED, "Missing Authorization header"),
-            ErrorCode::ErrCredMalformed => (StatusCode::BAD_REQUEST, "Malformed credentials"),
-            ErrorCode::ErrAuthNotSetup => (StatusCode::INTERNAL_SERVER_ERROR, "Authentication not configured"),
-            ErrorCode::ErrInvalidAccessKeyID => (StatusCode::FORBIDDEN, "Invalid access key"),
-        };
-
-        (status, Json(ErrorResponse { error: message })).into_response()
+        if self == ErrorCode::None {
+            return StatusCode::OK.into_response();
+        }
+        let request_id = generate_request_id();
+        let error_response = create_error_response(self, "/".to_string(), request_id, None, None);
+        let xml_body = xml_response(&error_response).unwrap_or_else(|_| {
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+            <Error>
+                <Code>InternalError</Code>
+                <Message>Failed to serialize error</Message>
+            </Error>"#.to_string()
+        });
+        Response::builder()
+            .status(error_response.status_code)
+            .header("Content-Type", "application/xml")
+            .header("x-amz-request-id", &error_response.request_id)
+            .body(Body::from(xml_body))
+            .unwrap()
     }
 }
 
 fn authenticate_request(headers: &axum::http::HeaderMap) -> ErrorCode {
-    let auth_head = match headers.get(header::AUTHORIZATION) {
+    let auth_header = match headers.get(header::AUTHORIZATION) {
         Some(header_value) => match header_value.to_str() {
             Ok(s) => s,
-            Err(_) => return ErrorCode::ErrCredMalformed,
+            Err(_) => return ErrorCode::CredMalformed,
         },
-        None => return ErrorCode::ErrMissingCredTag,
+        None => return ErrorCode::MissingCredTag,
     };
 
-    let credential_parts: Vec<&str> = auth_head.split("Credential=").collect();
-    if credential_parts.len() < 2 {
-        return ErrorCode::ErrCredMalformed;
-    }
-
-    let access_key_parts: Vec<&str> = credential_parts[1].split('/').collect();
-    if access_key_parts.is_empty() {
-        return ErrorCode::ErrCredMalformed;
-    }
-
-    let access_key = access_key_parts[0];
+    let access_key = match auth_header.split("Credential=").nth(1) {
+        Some(cred_part) => match cred_part.split('/').next() {
+            Some(key) => key,
+            None => return ErrorCode::CredMalformed,
+        },
+        None => return ErrorCode::CredMalformed,
+    };
 
     let expected_key = match env::var("lumi_access_key") {
         Ok(key) => key,
-        Err(_) => return ErrorCode::ErrAuthNotSetup,
+        Err(_) => return ErrorCode::AuthNotSetup,
     };
 
     if expected_key.is_empty() {
-        return ErrorCode::ErrAuthNotSetup;
+        return ErrorCode::AuthNotSetup;
     }
 
     if access_key != expected_key {
-        return ErrorCode::ErrInvalidAccessKeyID;
+        return ErrorCode::InvalidAccessKeyId;
     }
 
-    ErrorCode::ErrNone
+    ErrorCode::None
 }
 
 pub async fn s3_auth_middleware(req: Request, next: Next) -> Response {
     match authenticate_request(req.headers()) {
-        ErrorCode::ErrNone => next.run(req).await,
+        ErrorCode::None => next.run(req).await,
         error => error.into_response(),
     }
 }
