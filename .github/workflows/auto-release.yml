@@ -212,10 +212,23 @@ jobs:
           name: "Release ${{ needs.check-version.outputs.new-version }}"
           body: ${{ steps.release_notes.outputs.notes }}
           draft: false
-          prerelease: ${{ contains(needs.check-version.outputs.new-version, 'beta') || contains(needs.check-version.outputs.new-version, 'alpha') || contains(needs.check-version.outputs.new-version, 'rc') }}
+          prerelease: false 
           files: flattened-artifacts/*
           fail_on_unmatched_files: true
           token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release (Fallback with CLI)
+        if: steps.check_release.outputs.exists == 'false' && steps.create_release_primary.outcome == 'failure'
+        run: |
+          tag="${{ needs.check-version.outputs.new-version }}"
+          # Create release with GitHub CLI - explicitly not a prerelease
+          gh release create "$tag" \
+            --title "Release $tag" \
+            --notes "${{ steps.release_notes.outputs.notes }}" \
+            --latest \
+            flattened-artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
