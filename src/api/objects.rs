@@ -157,3 +157,15 @@ pub async fn list_objects_v2_handler(
     };
     xml::XmlResponse(response).into_response()
 }
+
+pub async fn copy_object_handler(
+    Path(params): Path<HashMap<String, String>>
+) -> impl IntoResponse {
+    
+}
+
+pub async fn delete_object_handler(
+    Path(params): Path<HashMap<String, String>>
+) -> impl IntoResponse {
+    
+}

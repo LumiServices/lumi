@@ -37,6 +37,7 @@ fn main() -> std::io::Result<()> {
             Err(e)
         }
     })?;
+    // TODO: auto check for updates (if enabled in config)
     let args = Args::parse();
     match args.command {
         Commands::Serve { port, hide_banner } => {
