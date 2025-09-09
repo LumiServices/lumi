@@ -1,7 +1,7 @@
 use reqwest::blocking::Client;
 use serde::Deserialize;
 use std::error::Error;
-pub const VERSION: &str = "beta-0.0-0_unstable_p_2";
+pub const VERSION: &str = "beta-0.0-0_unstable_p_3";
 #[derive(Deserialize)]
 struct Release {
     tag_name: String,
@@ -19,4 +19,8 @@ pub fn get_latest_github_release() -> Result<String, Box<dyn Error>> {
 
     let release: Release = response.json()?;
     Ok(release.tag_name)
+}
+
+pub fn download_latest_github_release() -> Result<String, Box<dyn Error>> {
+    Ok("".to_string()) //OK U THE HARDEST I SWEAR TO GOD
 }

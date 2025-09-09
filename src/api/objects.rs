@@ -158,14 +158,39 @@ pub async fn list_objects_v2_handler(
     xml::XmlResponse(response).into_response()
 }
 
-pub async fn copy_object_handler(
-    Path(params): Path<HashMap<String, String>>
-) -> impl IntoResponse {
+// pub async fn copy_object_handler(
+//     Path(params): Path<HashMap<String, String>>
+// ) -> impl IntoResponse {
     
-}
+// }
 
 pub async fn delete_object_handler(
     Path(params): Path<HashMap<String, String>>
 ) -> impl IntoResponse {
-    
+    let bucket = match params.get("bucket") {
+        Some(b) => b,
+        None => return ErrorCode::NoSuchBucket.into_response(),
+    };
+    let key = match params.get("key") {
+        Some(b) => b,
+        None => return ErrorCode::InvalidRequest.into_response(),
+    };
+    if !fs::metadata(format!("./data/{}", bucket)).await.is_ok() {
+    return ErrorCode::NoSuchBucket.into_response();
+    }
+    match fs::remove_file(&format!("./data/{}/{}", bucket, key)).await {
+        Ok(_) => {
+            let _ = fs::remove_file(&format!("./data/{}/{}.content_type", bucket, key)).await;
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Err(e) => {
+            match e.kind() {
+                std::io::ErrorKind::NotFound => {
+                    let _ = fs::remove_file(&format!("./data/{}/{}.content_type", bucket, key)).await;
+                    StatusCode::NO_CONTENT.into_response()
+            }
+            _ => ErrorCode::InternalError.into_response(),
+            }
+        }
+    }
 }
