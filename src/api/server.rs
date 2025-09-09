@@ -1,7 +1,7 @@
 use axum::{
     Router, middleware, routing::{delete, get, put},
 };
-use crate::{ api::{buckets::create_bucket_command_handler, objects::{delete_object_handler, get_object_handler, list_objects_v2_handler, put_object_handler}}, s3::middleware::s3_auth_middleware};
+use crate::{ api::{buckets::create_bucket_command_handler, objects::{delete_object_handler, get_object_handler, list_objects_v2_handler, put_object_handler}}, s3::middleware_v2::s3_auth_middleware};
 use tower_http::cors::{CorsLayer, Any};
 #[allow(unused_variables)] // <- remove after adding banner :3
 #[tokio::main]

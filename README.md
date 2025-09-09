@@ -11,14 +11,29 @@ cd lumi && just build
 ```
 
 ## Setup
-Due to standard S3 authentication not being implemented yet, set the `lumi_access_key` environment variable.
+lumi requires authentication credentials to operate. Generate them using
 ```sh
-export lumi_access_key="your-access-key"
+lumi generate-credentials
 ```
-We reccomend using a random hex
+### add to env
+**For bash/zsh:**
 ```sh
-openssl rand -hex 10
+echo 'export lumi_access_key="your-access-key"' >> ~/.bashrc
+echo 'export lumi_secret_key="your-secret-key"' >> ~/.bashrc
+source ~/.bashrc
 ```
+
+**For fish:**
+```sh
+set -Ux lumi_access_key "your-access-key"
+set -Ux lumi_secret_key "your-secret-key"
+```
+
+## Usage
+Once credentials are set, start the server:
+```sh
+lumi s
+
 
 ## Star History
 
