@@ -32,7 +32,8 @@ set -Ux lumi_secret_key "your-secret-key"
 ## Usage
 Once credentials are set, start the server:
 ```sh
-lumi s
+lumi serve
+```
 
 
 ## Star History
