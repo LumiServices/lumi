@@ -130,11 +130,8 @@ pub async fn list_objects_v2_handler(
                                 let size = metadata.len();
                                 let system_time = metadata.modified()
                                     .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-                                
-                                // Convert SystemTime to RFC-3339 formatted string
                                 let datetime: DateTime<Utc> = system_time.into();
                                 let last_modified = datetime.to_rfc3339();
-                                
                                 let etag = format!("\"{}\"", size);
                                 contents.push(S3Object {
                                     key: file_name.to_string(),
@@ -153,7 +150,7 @@ pub async fn list_objects_v2_handler(
         Err(e) => {
             return match e.kind() {
                 std::io::ErrorKind::NotFound => ErrorCode::NoSuchBucket.into_response(),
-                _ => ErrorCode::InternalError.into_response(), // Fixed syntax error here too
+                _ => ErrorCode::InternalError.into_response(), 
             };
         }
     }
