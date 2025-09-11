@@ -44,6 +44,7 @@ pub struct EmbedAuthor {
     icon_url: Option<String>,
 }
 
+#[allow(unused)]
 pub fn webhook_request(
     username: String,
     content: String,
