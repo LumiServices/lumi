@@ -56,13 +56,14 @@ fn authenticate_request(headers: &axum::http::HeaderMap, method: &str, uri: &str
 
     let (env_access_key, env_secret_key) = get_credentials_from_env();
     
-    let secret_key = if creds.access_key == env_access_key {
-        &env_secret_key
-    } else {
-        DEFAULT_SECRET_KEY
-    };
+    if creds.access_key != env_access_key {
+    return ErrorCode::InvalidAccessKeyId;
+        }
 
-    match calculate_signature(secret_key, method, uri, headers, body, &creds.credential_scope, &creds.signed_headers) {
+        let secret_key = &env_secret_key;
+        
+
+match calculate_signature(secret_key, method, uri, headers, body, &creds.credential_scope, &creds.signed_headers) {
         Ok(expected_signature) => {
             if creds.signature == expected_signature {
                 ErrorCode::None
@@ -74,17 +75,18 @@ fn authenticate_request(headers: &axum::http::HeaderMap, method: &str, uri: &str
     }
 }
 
+
 pub async fn s3_auth_middleware(req: Request, next: Next) -> Response {
     let (parts, body) = req.into_parts();
     let method = parts.method.as_str();
-    let uri = parts.uri.path();
+    let uri = parts.uri.to_string();
     
     let body_bytes = match axum::body::to_bytes(body, usize::MAX).await {
         Ok(bytes) => bytes,
         Err(_) => return ErrorCode::InternalError.into_response(),
     };
 
-    match authenticate_request(&parts.headers, method, uri, &body_bytes) {
+    match authenticate_request(&parts.headers, method, &uri, &body_bytes) {
         ErrorCode::None => {
             let req = Request::from_parts(parts, Body::from(body_bytes));
             next.run(req).await

@@ -167,24 +167,64 @@ pub fn parse_aws_credentials(headers: &HeaderMap) -> Result<AwsCredentials, Erro
    Ok(AwsCredentials { access_key, credential_scope, signed_headers: signed_headers.to_string(), signature: signature.to_string() })
 }
 
-pub fn calculate_signature(secret_key: &str, method: &str, uri: &str, headers: &HeaderMap, body: &[u8], credential_scope: &str, signed_headers: &str) -> Result<String, ErrorCode> {
-   let method = method.to_uppercase();
-   let canonical_uri = uri.to_string();
-   let canonical_query = "";
-   let canonical_headers = signed_headers.split(';').map(|header_name| {
-       let header_name = header_name.trim().to_lowercase();
-       let header_value = headers.get(&header_name).and_then(|v| v.to_str().ok()).unwrap_or("").trim();
-       format!("{}:{}", header_name, header_value)
-   }).collect::<Vec<String>>().join("\n");
-   let signed_headers_canonical = signed_headers.to_lowercase();
-   let req_hash = hex::encode(Sha256::digest(body));
-   let canonical_request = format!("{}\n{}\n{}\n{}\n\n{}\n{}", method, canonical_uri, canonical_query, canonical_headers, signed_headers_canonical, req_hash);
-   let string_to_sign_str = string_to_sign(&canonical_request, credential_scope, headers)?;
-   let signing_key = derive_signing_key(secret_key, credential_scope)?;
-   let mut mac = HmacSha256::new_from_slice(&signing_key).map_err(|_| ErrorCode::InternalError)?;
-   mac.update(string_to_sign_str.as_bytes());
-   let signature = hex::encode(mac.finalize().into_bytes());
-   Ok(signature)
+pub fn calculate_signature(
+    secret_key: &str, 
+    method: &str, 
+    uri: &str, 
+    headers: &HeaderMap, 
+    body: &[u8], 
+    credential_scope: &str, 
+    signed_headers: &str
+) -> Result<String, ErrorCode> {
+    let method = method.to_uppercase();
+    let (canonical_uri, canonical_query) = if let Some(query_start) = uri.find('?') {
+        let path = &uri[..query_start];
+        let query = &uri[query_start + 1..];
+        if query.is_empty() {
+            (path, String::new())
+        } else {
+            let mut params: Vec<&str> = query.split('&').collect();
+            params.sort();
+            (path, params.join("&"))
+        }
+    } else {
+        (uri, String::new())
+    };
+    let canonical_headers = signed_headers
+        .split(';')
+        .map(|header_name| {
+            let header_name = header_name.trim().to_lowercase();
+            let header_value = headers
+                .get(&header_name)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .trim()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            format!("{}:{}", header_name, header_value)
+        })
+        .collect::<Vec<String>>()
+        .join("\n");
+    
+    let signed_headers_canonical = signed_headers.to_lowercase();
+    let payload_hash = hex::encode(Sha256::digest(body));
+    let canonical_request = format!(
+        "{}\n{}\n{}\n{}\n\n{}\n{}",
+        method,
+        canonical_uri,
+        canonical_query,
+        canonical_headers,
+        signed_headers_canonical,
+        payload_hash
+    );
+    let string_to_sign_str = string_to_sign(&canonical_request, credential_scope, headers)?;
+    let signing_key = derive_signing_key(secret_key, credential_scope)?;
+    let mut mac = HmacSha256::new_from_slice(&signing_key).map_err(|_| ErrorCode::InternalError)?;
+    mac.update(string_to_sign_str.as_bytes());
+    let signature = hex::encode(mac.finalize().into_bytes());
+    
+    Ok(signature)
 }
 
 fn string_to_sign(request: &str, credential_scope: &str, headers: &HeaderMap) -> Result<String, ErrorCode> {
@@ -193,19 +233,20 @@ fn string_to_sign(request: &str, credential_scope: &str, headers: &HeaderMap) ->
 }
 
 fn derive_signing_key(secret_key: &str, credential_scope: &str) -> Result<Vec<u8>, ErrorCode> {
-   let parts: Vec<&str> = credential_scope.split('/').collect();
-   if parts.len() != 4 {
-       return Err(ErrorCode::CredMalformed);
-   }
-   let date = parts[0];
-   let region = parts[1];
-   let service = parts[2];
-   let k_secret = format!("AWS4{}", secret_key);
-   let k_date = hmac_sha256(k_secret.as_bytes(), date.as_bytes())?;
-   let k_region = hmac_sha256(&k_date, region.as_bytes())?;
-   let k_service = hmac_sha256(&k_region, service.as_bytes())?;
-   let k_signing = hmac_sha256(&k_service, b"aws4_request")?;
-   Ok(k_signing)
+    let parts: Vec<&str> = credential_scope.split('/').collect();
+    if parts.len() != 4 {
+        return Err(ErrorCode::CredMalformed);
+    }
+    let date = parts[0];
+    let region = parts[1];
+    let service = parts[2];
+    let k_secret = format!("AWS4{}", secret_key);
+    let k_date = hmac_sha256(k_secret.as_bytes(), date.as_bytes())?;
+    let k_region = hmac_sha256(&k_date, region.as_bytes())?;
+    let k_service = hmac_sha256(&k_region, service.as_bytes())?;
+    let k_signing = hmac_sha256(&k_service, b"aws4_request")?;
+    
+    Ok(k_signing)
 }
 
 fn hmac_sha256(key: &[u8], data: &[u8]) -> Result<Vec<u8>, ErrorCode> {

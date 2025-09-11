@@ -5,6 +5,7 @@ use axum::{
 use serde::Serialize;
 use tokio::fs;
 use crate::{core::xml, s3::errors::ErrorCode};
+use chrono::{DateTime, Utc};
 
 #[derive(Serialize)]
 #[serde(rename = "ListBucketResult")]
@@ -51,6 +52,12 @@ pub async fn put_object_handler(
         eprintln!("Directory creation error: {:?}", e);
         return ErrorCode::InternalError.into_response();
     }
+    /*
+    Don't feel like opening an issue for this:
+    weird upload issue uploading via the aws sdk seems to corrupt files.
+    use a fetch request till this issue is fixed
+    -09/11/2025
+    */
     if let Some(content_type) = headers.get("content-type") {
         let content_type_path = format!("{}.content_type", file_path);
         if let Ok(ct_str) = content_type.to_str() {
@@ -121,12 +128,13 @@ pub async fn list_objects_v2_handler(
                         match fs::metadata(&path).await {
                             Ok(metadata) => {
                                 let size = metadata.len();
-                                let timestamp = metadata.modified()
-                                .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-                                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_secs();
-                                let last_modified = timestamp.to_string();
+                                let system_time = metadata.modified()
+                                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                                
+                                // Convert SystemTime to RFC-3339 formatted string
+                                let datetime: DateTime<Utc> = system_time.into();
+                                let last_modified = datetime.to_rfc3339();
+                                
                                 let etag = format!("\"{}\"", size);
                                 contents.push(S3Object {
                                     key: file_name.to_string(),
@@ -145,7 +153,7 @@ pub async fn list_objects_v2_handler(
         Err(e) => {
             return match e.kind() {
                 std::io::ErrorKind::NotFound => ErrorCode::NoSuchBucket.into_response(),
-                _ => ErrorCode::InternalError.into_response(),
+                _ => ErrorCode::InternalError.into_response(), // Fixed syntax error here too
             };
         }
     }
@@ -158,10 +166,50 @@ pub async fn list_objects_v2_handler(
     xml::XmlResponse(response).into_response()
 }
 
+//idk if this works I'm 2 lazy to figure out how to have 2 put routes sowwy :(
 // pub async fn copy_object_handler(
-//     Path(params): Path<HashMap<String, String>>
+//     Path(params): Path<HashMap<String, String>>,
+//     headers: HeaderMap
 // ) -> impl IntoResponse {
-    
+//        let bucket = match params.get("bucket") {
+//         Some(b) => b,
+//         None => return ErrorCode::NoSuchBucket.into_response(),
+//     };
+//     let key = match params.get("key") {
+//         Some(b) => b,
+//         None => return ErrorCode::InvalidRequest.into_response(),
+//     };
+//     let source = match headers.get("x-amz-copy-source") {
+//         Some(s) if !s.as_bytes().is_empty() => match s.to_str() {
+//             Ok(val) if val.is_empty() => val,
+//             _ => return ErrorCode::InvalidRequest.into_response(),
+//         },
+//         _ => return ErrorCode::InvalidRequest.into_response(),
+//     };
+//     let source = source.trim_start_matches("/");
+//     let parts: Vec<&str> = source.splitn(2, "/").collect();
+//     if parts.len() != 2 {
+//         return ErrorCode::InvalidRequest.into_response();
+//     }
+//     let source_bucket = parts[0];
+//     let source_key = parts[1];
+//     let source_file_path = format!("./data/{}/{}", source_bucket, source_key);
+//     let source_content_type_path = format!("{}.content_type", source_file_path);
+//     let dest_file_path = format!("./data/{}/{}", bucket, key);
+//     let dest_content_type_path = format!("{}.content_type", dest_file_path);
+//     if !fs::metadata(&&source_file_path).await.is_ok() {
+//         return ErrorCode::NoSuchKey.into_response()
+//     }
+//     match fs::copy(&source_file_path, &dest_file_path).await {
+//         Ok(_) => {
+//             let _ = fs::copy(&source_content_type_path, &dest_content_type_path).await;
+//             StatusCode::OK.into_response()
+//         }
+//         Err(e) => match e.kind() {
+//             std::io::ErrorKind::NotFound => ErrorCode::NoSuchKey.into_response(),
+//             _ => ErrorCode::InternalError.into_response(),
+//         }
+//     }
 // }
 
 pub async fn delete_object_handler(
