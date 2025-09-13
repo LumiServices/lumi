@@ -5,7 +5,6 @@ use crate::{ api::{buckets::create_bucket_command_handler, objects::{delete_obje
 use tower_http::cors::{CorsLayer, Any};
 
 #[allow(unused_variables)] // <- remove after adding banner :3
-#[tokio::main]
 pub async fn start_server(port: u64, show_start_banner: bool) {
     println!("REST API started on http://0.0.0.0:{}", port);
     let cors = CorsLayer::new()

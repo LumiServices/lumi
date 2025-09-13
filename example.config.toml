@@ -4,5 +4,10 @@ data_dir = "./data"
 db_dir = "./db"
 allowedorigin = "*"
 
-# [discord]
-# webhook_url = ""
+[discord]
+webhook_url = ""
+
+[discord.logging] #basic for now
+server.startup = true
+server.shutdown = true
+uploaded.images = true
