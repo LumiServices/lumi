@@ -11,7 +11,8 @@ on:
   pull_request:
     branches: [ main, master ]
     paths: [ 'src/core/app.rs' ]
-
+  workflow_dispatch:
+    
 jobs:
   check-version:
     runs-on: ubuntu-latest
