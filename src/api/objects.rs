@@ -52,12 +52,6 @@ pub async fn put_object_handler(
         eprintln!("Directory creation error: {:?}", e);
         return ErrorCode::InternalError.into_response();
     }
-    /*
-    Don't feel like opening an issue for this:
-    weird upload issue uploading via the aws sdk seems to corrupt files.
-    use a fetch request till this issue is fixed
-    -09/11/2025
-    */
     let body_bytes = match axum::body::to_bytes(body, usize::MAX).await {
         Ok(bytes) => bytes,
         Err(_) => return ErrorCode::InternalError.into_response(),
