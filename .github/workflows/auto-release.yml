@@ -213,7 +213,7 @@ jobs:
           name: "Release ${{ needs.check-version.outputs.new-version }}"
           body: ${{ steps.release_notes.outputs.notes }}
           draft: false
-          prerelease: false 
+          prerelease: true 
           files: flattened-artifacts/*
           fail_on_unmatched_files: true
           token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use axum::{
-    body::Bytes, extract::Path, http::{HeaderMap, HeaderValue, StatusCode}, response::IntoResponse
+    body::{Body}, extract::Path, http::{HeaderMap, HeaderValue, StatusCode}, response::IntoResponse
 };
 use serde::Serialize;
 use tokio::fs;
@@ -37,7 +37,7 @@ struct S3Object {
 pub async fn put_object_handler(
     Path(params): Path<HashMap<String, String>>,
     headers: HeaderMap,
-    body: Bytes
+    body: Body
 ) -> impl IntoResponse {
     let bucket = match params.get("bucket") {
         Some(b) => b,
@@ -58,13 +58,17 @@ pub async fn put_object_handler(
     use a fetch request till this issue is fixed
     -09/11/2025
     */
+    let body_bytes = match axum::body::to_bytes(body, usize::MAX).await {
+        Ok(bytes) => bytes,
+        Err(_) => return ErrorCode::InternalError.into_response(),
+    };
     if let Some(content_type) = headers.get("content-type") {
         let content_type_path = format!("{}.content_type", file_path);
         if let Ok(ct_str) = content_type.to_str() {
             let _ = fs::write(&content_type_path, ct_str).await;
         }
     }
-    match fs::write(&file_path, body).await {
+   match fs::write(&file_path, &body_bytes).await {
         Ok(_) => StatusCode::OK.into_response(),
         Err(e) => match e.kind() {
             std::io::ErrorKind::NotFound => ErrorCode::NoSuchKey.into_response(),
