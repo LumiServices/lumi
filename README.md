@@ -1,9 +1,9 @@
 # LUMI (beta)
 
 ## Downloads
-- **Windows**: [Download](https://github.com/ros-e/lumi/releases)
-- **macOS**: [Download](https://github.com/ros-e/lumi/releases)
-- **Linux**: [Download](https://github.com/ros-e/lumi/releases)
+**Windows**: [Download](https://github.com/ros-e/lumi/releases)
+**macOS**: [Download](https://github.com/ros-e/lumi/releases)
+**Linux**: [Download](https://github.com/ros-e/lumi/releases)
 
 ## Build from source
 ```sh
