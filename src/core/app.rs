@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-pub const VERSION: &str = "beta-0.0-3";
+pub const VERSION: &str = "stable-0.0-1";
 #[derive(Deserialize)]
 struct Release {
     tag_name: String,

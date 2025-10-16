@@ -1,4 +1,4 @@
-use std::{fs::create_dir};
+use std::fs::create_dir;
 
 use clap::{Parser, Subcommand};
 use colored::*;
@@ -25,6 +25,8 @@ enum Commands {
         hide_banner: bool,
         #[arg(long)]
         webhook_url: Option<String>,
+        #[arg(long, default_value = "*")]
+        allowed_origin: String,
     }, 
     Update,
     GenerateCredentials {
@@ -36,44 +38,45 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
-    //create data directory if it doesnt already exist
-    create_dir("./data").or_else(|e| {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let data_dir = "./data";
+    
+    create_dir(data_dir).or_else(|e| {
         if e.kind() == std::io::ErrorKind::AlreadyExists {
             Ok(())
         } else {
             Err(e)
         }
     })?;
-    // TODO: auto check for updates (if enabled in config)
+    
     let args = Args::parse();
     match args.command {
-        Commands::Serve { port, hide_banner, webhook_url } => {
-        if let Some(url) = webhook_url {
-            let mut embed = Embed::new();
-            embed.title = Some("🚀 Lumi Server Started!".to_string());
-    embed.description = Some(format!(
-        "```ansi\n\u{001b}[1;34mVersion: {}\nStatus: Online\u{001b}[0m\n```\n🔗 **Repository:** [ros-e/lumi](https://github.com/ros-e/lumi)", 
-        core::app::VERSION,
-    ));
-    embed.color = Some(0x6291FF);
-            let embeds = vec![embed];
-            let result = webhook_request(
-                Some("lumi".to_string()),
-                Some("https://github.com/ros-e/lumi/blob/main/src/discord/avatar.png?raw=true".to_string()),
-                None,
-                embeds,
-                url
-            ).await;
-            
-            if let Err(e) = result {
-                eprintln!("Failed to send webhook! {}", e);
+        Commands::Serve { port, hide_banner, webhook_url, allowed_origin } => {
+            if let Some(url) = &webhook_url {
+                let mut embed = Embed::new();
+                embed.title = Some("🚀 Lumi Server Started!".to_string());
+                embed.description = Some(format!(
+                    "```ansi\n\u{001b}[1;34mVersion: {}\nStatus: Online\u{001b}[0m\n```\n🔗 **Repository:** [ros-e/lumi](https://github.com/ros-e/lumi)",
+                    core::app::VERSION,
+                ));
+                embed.color = Some(0x6291FF);
+                let embeds = vec![embed];
+                let result = webhook_request(
+                    Some("lumi".to_string()),
+                    Some("https://github.com/ros-e/lumi/blob/main/src/discord/avatar.png?raw=true".to_string()),
+                    None,
+                    embeds,
+                    url.clone()
+                ).await;
+                
+                if let Err(e) = result {
+                    eprintln!("Failed to send webhook! {}", e);
+                }
             }
-        }
 
-    api::server::start_server(port, !hide_banner).await;
-    Ok(())
-}
+            api::server::start_server(port, !hide_banner, allowed_origin).await;
+            Ok(())
+        }
         Commands::Update => {
             println!("{}", "Checking for updates...".yellow());
             match get_latest_github_release() {
@@ -109,7 +112,6 @@ async fn main() -> std::io::Result<()> {
                         Ok(secret_key) => {
                             println!("Access Key: {}", access_key.bright_blue());
                             println!("Secret Key: {}", secret_key.bright_blue());
-                            println!("\n{}", "Store these credentials securely!".yellow());
                             Ok(())
                         }
                         Err(e) => {

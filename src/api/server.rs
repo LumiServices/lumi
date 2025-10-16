@@ -1,14 +1,30 @@
 use axum::{
-    Router, middleware::{self}, routing::{delete, get, put},
+    Router, http::HeaderValue, middleware::{self}, routing::{delete, get, put}
 };
-use crate::{ api::{buckets::create_bucket_command_handler, objects::{delete_object_handler, get_object_handler, list_objects_v2_handler, put_object_handler}}, s3::middleware_v2::s3_auth_middleware};
+use crate::{ 
+    api::{
+        buckets::create_bucket_command_handler, 
+        objects::{
+            delete_object_handler, 
+            get_object_handler, 
+            list_objects_v2_handler, 
+            put_object_handler
+        }
+    }, 
+    s3::middleware_v2::s3_auth_middleware
+};
 use tower_http::cors::{CorsLayer, Any};
 
 #[allow(unused_variables)] // <- remove after adding banner :3
-pub async fn start_server(port: u64, show_start_banner: bool) {
+pub async fn start_server(port: u64, show_start_banner: bool, allowed_origin: String) {
     println!("REST API started on http://0.0.0.0:{}", port);
+    
     let cors = CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin(
+            allowed_origin
+                .parse::<HeaderValue>()
+                .expect("Invalid origin header value")
+        )
         .allow_methods(Any)
         .allow_headers(Any); 
     
