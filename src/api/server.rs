@@ -1,6 +1,7 @@
 use axum::{
-    Router, http::HeaderValue, middleware::{self}, routing::{delete, get, put}
+    Json, Router, http::HeaderValue, middleware::{self}, routing::{delete, get, put}
 };
+use serde_json::json;
 use crate::{ 
     api::{
         buckets::create_bucket_command_handler, 
@@ -34,6 +35,9 @@ pub async fn start_server(port: u64, show_start_banner: bool, allowed_origin: St
         .route("/{bucket}/", put(create_bucket_command_handler))
         .route("/{bucket}/", get(list_objects_v2_handler))
         .layer(middleware::from_fn(s3_auth_middleware))
+        //admin dashboard api idont fucking know
+        .route("/health", get(health))
+        //
         .route("/{bucket}/{*key}", get(get_object_handler))
         .layer(cors);
     
@@ -41,4 +45,8 @@ pub async fn start_server(port: u64, show_start_banner: bool, allowed_origin: St
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn health() -> Json<serde_json::Value> {
+    Json(json!({ "success": true }))
 }

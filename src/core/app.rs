@@ -4,7 +4,8 @@ use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-pub const VERSION: &str = "stable-0.0-1";
+use crate::user_agent::generate::generate_ua;
+pub const VERSION: &str = "stable-0.1-1";
 #[derive(Deserialize)]
 struct Release {
     tag_name: String,
@@ -23,7 +24,7 @@ pub fn get_latest_github_release() -> Result<String, Box<dyn Error>> {
     let client = Client::new();
     let response = client
         .get(url)
-        .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36 Edg/86.0.622.56")
+        .header("User-Agent", generate_ua())
         .send()?
         .error_for_status()?;
 
@@ -36,7 +37,7 @@ pub fn download_latest_github_release() -> Result<String, Box<dyn Error>> {
     let client = Client::new();
     let response = client
         .get(url)
-        .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36 Edg/86.0.622.56")
+        .header("User-Agent", generate_ua())
         .send()?
         .error_for_status()?;
     let release: Release = response.json()?;
@@ -59,7 +60,7 @@ pub fn download_latest_github_release() -> Result<String, Box<dyn Error>> {
     println!("Downloading: {}", asset.name);
     let download_response = client
         .get(&asset.browser_download_url)
-        .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36 Edg/86.0.622.56")
+        .header("User-Agent", generate_ua())
         .send()?
         .error_for_status()?;
     let downloads_dir = "downloads";

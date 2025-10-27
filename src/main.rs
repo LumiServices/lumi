@@ -1,4 +1,5 @@
-use std::fs::create_dir;
+use std::fs::create_dir_all;
+use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use colored::*;
@@ -7,6 +8,7 @@ use lumi::{
     core::{self, app::get_latest_github_release},
     discord::webhook::{Embed, webhook_request},
     s3::credentials::{generate_access_key, generate_secret_key},
+    db::sqlite::{Database, DB},
 };
 
 #[derive(Parser, Debug)]
@@ -40,14 +42,15 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let data_dir = "./data";
+    let db_dir = "./db";
     
-    create_dir(data_dir).or_else(|e| {
-        if e.kind() == std::io::ErrorKind::AlreadyExists {
-            Ok(())
-        } else {
-            Err(e)
-        }
-    })?;
+    create_dir_all(data_dir)?;
+    create_dir_all(db_dir)?;
+    
+    let db_path = PathBuf::from("./db/lumi.db");
+    let db = Database::new(&db_path)?;
+    db.create_table("metadata", "object_key", "content_type")?;
+    DB.set(db).expect("Failed to initialize database");
     
     let args = Args::parse();
     match args.command {
@@ -79,27 +82,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Update => {
             println!("{}", "Checking for updates...".yellow());
-            match get_latest_github_release() {
-                Ok(latest) => {
-                    let current = core::app::VERSION.trim_start_matches('v');
-                    let latest = latest.trim_start_matches('v');
-                    if latest != current {
+            match tokio::task::spawn_blocking(|| {
+                get_latest_github_release().map_err(|e| e.to_string())
+            }).await {
+                Ok(result) => match result {
+                    Ok(latest) => {
+                        let current = core::app::VERSION.trim_start_matches('v');
+                        let latest = latest.trim_start_matches('v');
+                        if latest != current {
+                            println!(
+                                "{}",
+                                format!(
+                                    "New version available: {} (current: {})",
+                                    latest, current
+                                )
+                                .cyan()
+                            );
+                        } else {
+                            println!("{}", "You are running the latest version.".green());
+                        }
+                    }
+                    Err(e) => {
                         println!(
                             "{}",
-                            format!(
-                                "New version available: {} (current: {})",
-                                latest, current
-                            )
-                            .cyan()
+                            format!("Failed to check for updates: {}", e).red()
                         );
-                    } else {
-                        println!("{}", "You are running the latest version.".green());
                     }
-                }
+                },
                 Err(e) => {
                     println!(
                         "{}",
-                        format!("Failed to check for updates: {}", e).red()
+                        format!("Failed to spawn blocking task: {}", e).red()
                     );
                 }
             }

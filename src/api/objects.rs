@@ -4,7 +4,7 @@ use axum::{
 };
 use serde::Serialize;
 use tokio::fs;
-use crate::{core::xml, s3::errors::ErrorCode};
+use crate::{core::xml, s3::errors::ErrorCode, db::sqlite::DB};
 use chrono::{DateTime, Utc};
 
 #[derive(Serialize)]
@@ -47,7 +47,7 @@ pub async fn put_object_handler(
         Some(b) => b,
         None => return ErrorCode::InvalidRequest.into_response(),
     };
-    let file_path = format!("./data/{}/{}", bucket, key); // <- I need to move this to some sort of config
+    let file_path = format!("./data/{}/{}", bucket, key);
     if let Err(e) = fs::create_dir_all(format!("./data/{}", bucket)).await {
         eprintln!("Directory creation error: {:?}", e);
         return ErrorCode::InternalError.into_response();
@@ -56,12 +56,17 @@ pub async fn put_object_handler(
         Ok(bytes) => bytes,
         Err(_) => return ErrorCode::InternalError.into_response(),
     };
+    
     if let Some(content_type) = headers.get("content-type") {
-        let content_type_path = format!("{}.content_type", file_path);
         if let Ok(ct_str) = content_type.to_str() {
-            let _ = fs::write(&content_type_path, ct_str).await;
+            let db = DB.get().unwrap();
+            let object_key = format!("{}/{}", bucket, key);
+            if let Err(e) = db.insert("metadata", "object_key", "content_type", object_key.as_bytes(), ct_str.as_bytes()) {
+                eprintln!("Failed to save content type to db: {:?}", e);
+            }
         }
     }
+    
    match fs::write(&file_path, &body_bytes).await {
         Ok(_) => StatusCode::OK.into_response(),
         Err(e) => match e.kind() {
@@ -69,6 +74,10 @@ pub async fn put_object_handler(
             _ => ErrorCode::InternalError.into_response(),
         }
     }
+}
+
+pub async fn copy_and_put_object_handlers() {
+    // ill write this shit later its 02:00
 }
 
 pub async fn get_object_handler(
@@ -83,17 +92,28 @@ pub async fn get_object_handler(
         None => return ErrorCode::InvalidRequest.into_response(),
     };
     let file_path = format!("./data/{}/{}", bucket, key);
-    let content_type_path = format!("{}.content_type", file_path);
+    
     match fs::read(&file_path).await {
        Ok(contents) => {
             let mut headers = HeaderMap::new();
-            if let Ok(ct) = fs::read_to_string(&content_type_path).await {
-                if let Ok(header_value) = HeaderValue::from_str(ct.trim()) {
-                    headers.insert("content-type", header_value);
-                } else {
+            let db = DB.get().unwrap();
+            let object_key = format!("{}/{}", bucket, key);
+            
+            match db.get("metadata", "object_key", "content_type", object_key.as_bytes()) {
+                Ok(Some(ct_bytes)) => {
+                    if let Ok(ct_str) = String::from_utf8(ct_bytes) {
+                        if let Ok(header_value) = HeaderValue::from_str(&ct_str) {
+                            headers.insert("content-type", header_value);
+                        } else {
+                            headers.insert("content-type", HeaderValue::from_static("application/octet-stream"));
+                        }
+                    }
+                }
+                _ => {
                     headers.insert("content-type", HeaderValue::from_static("application/octet-stream"));
                 }
             }
+            
             (StatusCode::OK, headers, contents).into_response()
         },
         Err(e) => {
@@ -161,52 +181,6 @@ pub async fn list_objects_v2_handler(
     xml::XmlResponse(response).into_response()
 }
 
-//idk if this works I'm 2 lazy to figure out how to have 2 put routes sowwy :(
-// pub async fn copy_object_handler(
-//     Path(params): Path<HashMap<String, String>>,
-//     headers: HeaderMap
-// ) -> impl IntoResponse {
-//        let bucket = match params.get("bucket") {
-//         Some(b) => b,
-//         None => return ErrorCode::NoSuchBucket.into_response(),
-//     };
-//     let key = match params.get("key") {
-//         Some(b) => b,
-//         None => return ErrorCode::InvalidRequest.into_response(),
-//     };
-//     let source = match headers.get("x-amz-copy-source") {
-//         Some(s) if !s.as_bytes().is_empty() => match s.to_str() {
-//             Ok(val) if val.is_empty() => val,
-//             _ => return ErrorCode::InvalidRequest.into_response(),
-//         },
-//         _ => return ErrorCode::InvalidRequest.into_response(),
-//     };
-//     let source = source.trim_start_matches("/");
-//     let parts: Vec<&str> = source.splitn(2, "/").collect();
-//     if parts.len() != 2 {
-//         return ErrorCode::InvalidRequest.into_response();
-//     }
-//     let source_bucket = parts[0];
-//     let source_key = parts[1];
-//     let source_file_path = format!("./data/{}/{}", source_bucket, source_key);
-//     let source_content_type_path = format!("{}.content_type", source_file_path);
-//     let dest_file_path = format!("./data/{}/{}", bucket, key);
-//     let dest_content_type_path = format!("{}.content_type", dest_file_path);
-//     if !fs::metadata(&&source_file_path).await.is_ok() {
-//         return ErrorCode::NoSuchKey.into_response()
-//     }
-//     match fs::copy(&source_file_path, &dest_file_path).await {
-//         Ok(_) => {
-//             let _ = fs::copy(&source_content_type_path, &dest_content_type_path).await;
-//             StatusCode::OK.into_response()
-//         }
-//         Err(e) => match e.kind() {
-//             std::io::ErrorKind::NotFound => ErrorCode::NoSuchKey.into_response(),
-//             _ => ErrorCode::InternalError.into_response(),
-//         }
-//     }
-// }
-
 pub async fn delete_object_handler(
     Path(params): Path<HashMap<String, String>>
 ) -> impl IntoResponse {
@@ -219,20 +193,22 @@ pub async fn delete_object_handler(
         None => return ErrorCode::InvalidRequest.into_response(),
     };
     if !fs::metadata(format!("./data/{}", bucket)).await.is_ok() {
-    return ErrorCode::NoSuchBucket.into_response();
+        return ErrorCode::NoSuchBucket.into_response();
     }
+    
     match fs::remove_file(&format!("./data/{}/{}", bucket, key)).await {
         Ok(_) => {
-            let _ = fs::remove_file(&format!("./data/{}/{}.content_type", bucket, key)).await;
+            let db = DB.get().unwrap();
+            let object_key = format!("{}/{}", bucket, key);
+            let _ = db.get("metadata", "object_key", "content_type", object_key.as_bytes());
             StatusCode::NO_CONTENT.into_response()
         }
         Err(e) => {
             match e.kind() {
                 std::io::ErrorKind::NotFound => {
-                    let _ = fs::remove_file(&format!("./data/{}/{}.content_type", bucket, key)).await;
                     StatusCode::NO_CONTENT.into_response()
-            }
-            _ => ErrorCode::InternalError.into_response(),
+                }
+                _ => ErrorCode::InternalError.into_response(),
             }
         }
     }

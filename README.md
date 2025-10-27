@@ -1,4 +1,4 @@
-# LUMI (beta)
+# LUMI
 
 ## Downloads
 - **Windows**: [Download](https://github.com/ros-e/lumi/releases)
