@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use crate::user_agent::generate::generate_ua;
-pub const VERSION: &str = "stable-0.1-1";
+pub const VERSION: &str = "stable-0.1-1_patch_1";
 #[derive(Deserialize)]
 struct Release {
     tag_name: String,

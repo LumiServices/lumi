@@ -200,7 +200,7 @@ pub async fn delete_object_handler(
         Ok(_) => {
             let db = DB.get().unwrap();
             let object_key = format!("{}/{}", bucket, key);
-            let _ = db.get("metadata", "object_key", "content_type", object_key.as_bytes());
+            let _ = db.delete("metadata", "object_key", object_key.as_bytes());
             StatusCode::NO_CONTENT.into_response()
         }
         Err(e) => {

@@ -46,5 +46,13 @@ pub fn get(&self, table_name: &str, key_column: &str, value_column: &str, key: &
         Err(e) => Err(e),
     }
  }
-
+pub fn delete(&self, table_name: &str, key_column: &str, key: &[u8]) -> rusqlite::Result<()> {
+    let sql = format!(
+        "DELETE FROM {} WHERE {} = ?1",
+        table_name, key_column
+    );
+    let conn = self.conn.lock().unwrap();
+    conn.execute(&sql, params![key])?;
+    Ok(())
+}
 }
