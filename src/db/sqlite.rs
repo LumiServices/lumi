@@ -14,7 +14,7 @@ impl Database {
         let conn = Connection::open(path)?;
         Ok(Database { conn: Mutex::new(conn) })
     }
-    
+
  pub fn insert(&self, table_name: &str, key_column: &str, value_column: &str, key: &[u8], value: &[u8]) -> rusqlite::Result<()> {
     let sql = format!(
         "INSERT INTO {} ({}, {}) VALUES (?1, ?2)",
@@ -55,7 +55,13 @@ pub fn delete(&self, table_name: &str, key_column: &str, key: &[u8]) -> rusqlite
     conn.execute(&sql, params![key])?;
     Ok(())
 }
-pub fn update() {
-    
+pub fn update(&self, table_name: &str, value_column: &str, new_value: &[u8], key_column: &str, key: &[u8]) -> rusqlite::Result<()> {
+    let sql = format!(
+        "UPDATE {} SET {} = ?1 WHERE {} = ?2",
+        table_name, value_column, key_column
+    );
+    let conn = self.conn.lock().unwrap();
+    conn.execute(&sql, params![new_value, key])?;
+    Ok(())
 }
 }
