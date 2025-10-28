@@ -25,7 +25,14 @@ rusqlite = { version = "0.37.0", features = ["bundled"] }
 
 [dependencies.uuid]
 version = "1.18.1"
-# Lets you generate random UUIDs
 features = [
     "v4",
 ]
+
+# this will probably be removed by patch 4?
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"

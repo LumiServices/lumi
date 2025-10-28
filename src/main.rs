@@ -1,8 +1,8 @@
-use std::fs::create_dir_all;
+use std::{fs::create_dir_all, io::Write};
 use std::path::PathBuf;
-
 use clap::{Parser, Subcommand};
 use colored::*;
+use lumi::core::app::download_latest_github_release;
 use lumi::{
     api,
     core::{self, app::get_latest_github_release},
@@ -90,14 +90,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let current = core::app::VERSION.trim_start_matches('v');
                         let latest = latest.trim_start_matches('v');
                         if latest != current {
-                            println!(
-                                "{}",
-                                format!(
-                                    "New version available: {} (current: {})",
-                                    latest, current
-                                )
-                                .cyan()
-                            );
+                            println!("{}", format!("New version available: {} (current: {})", latest, current).cyan());
+                            tokio::task::spawn_blocking(|| {
+                                loop {
+                                    print!("Would you like to download the latest version? (Y/N): "); 
+                                    std::io::stdout().flush().expect("flush failed");
+                                    let mut input = String::new();
+                                    std::io::stdin().read_line(&mut input).expect("failed to read line");
+                                    let input = input.trim().to_lowercase();
+                                    match input.as_str() {
+                                        "y" => {
+                                            match download_latest_github_release() {
+                                                Ok(path) => {
+                                                    println!("Downloaded successfully to {}", path);
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("Failed to download update: {}", e);
+                                                }
+                                            }
+                                            break;
+                                        }
+                                        "n" => {
+                                            break;
+                                        }
+                                        _ => {
+                                            println!("Please enter 'Y' or 'N'.");
+                                        }
+                                    }
+                                }
+                            }).await.unwrap();
                         } else {
                             println!("{}", "You are running the latest version.".green());
                         }

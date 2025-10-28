@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use crate::user_agent::generate::generate_ua;
-pub const VERSION: &str = "stable-0.1-1_patch_2";
+pub const VERSION: &str = "stable-0.1-1_patch_3";
 #[derive(Deserialize)]
 struct Release {
     tag_name: String,
@@ -45,17 +45,19 @@ pub fn download_latest_github_release() -> Result<String, Box<dyn Error>> {
     let arch = std::env::consts::ARCH;
     let asset = release.assets.iter().find(|asset| {
         let name_lower = asset.name.to_lowercase();
-        (match os {
-            "windows" => name_lower.contains("windows") || name_lower.contains("win") || name_lower.ends_with(".exe"),
-            "macos" => name_lower.contains("macos") || name_lower.contains("darwin") || name_lower.contains("mac"),
-            "linux" => name_lower.contains("linux"),
-            _ => false,
-        }) && match arch {
-            "x86_64" => name_lower.contains("x86_64") || name_lower.contains("amd64") || name_lower.contains("x64"),
-            "aarch64" => name_lower.contains("aarch64") || name_lower.contains("arm64"),
-            "x86" => name_lower.contains("x86") || name_lower.contains("i386") || name_lower.contains("i686"),
-            _ => true, 
-        }
+        let os_match = match os {
+        "windows" => name_lower.contains("windows") || name_lower.contains("win32") || name_lower.contains("win64") || name_lower.ends_with(".exe"),
+        "macos" => name_lower.contains("darwin") || name_lower.contains("macos"),
+        "linux" => name_lower.contains("linux"),
+        _ => false,
+    };
+    let arch_match = match arch {
+        "x86_64" => name_lower.contains("x86_64") || name_lower.contains("amd64") || name_lower.contains("x64"),
+        "aarch64" => name_lower.contains("aarch64") || name_lower.contains("arm64"),
+        "x86" => name_lower.contains("i386") || name_lower.contains("i686") || name_lower.contains("x86"),
+        _ => true,
+    };
+    os_match && arch_match
     }).ok_or("No suitable release asset found for your platform")?;
     println!("Downloading: {}", asset.name);
     let download_response = client
@@ -63,9 +65,7 @@ pub fn download_latest_github_release() -> Result<String, Box<dyn Error>> {
         .header("User-Agent", generate_ua())
         .send()?
         .error_for_status()?;
-    let downloads_dir = "downloads";
-    std::fs::create_dir_all(downloads_dir)?;
-    let file_path = Path::new(downloads_dir).join(&asset.name);
+    let file_path = Path::new(&asset.name);
     let mut file = File::create(&file_path)?;
     let content = download_response.bytes()?;
     file.write_all(&content)?;
