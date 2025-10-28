@@ -4,8 +4,7 @@ use axum::{
 use serde_json::json;
 use crate::{ 
     api::{
-        buckets::create_bucket_command_handler, 
-        objects::{
+        buckets::{create_bucket_handler, delete_bucket_handler, list_buckets_handler}, objects::{
             delete_object_handler, 
             get_object_handler, 
             list_objects_v2_handler, 
@@ -30,14 +29,14 @@ pub async fn start_server(port: u64, show_start_banner: bool, allowed_origin: St
         .allow_headers(Any); 
     
     let app = Router::new()
+        .route("/", get(list_buckets_handler))
         .route("/{bucket}/{*key}", put(put_object_handler))
         .route("/{bucket}/{*key}", delete(delete_object_handler))
-        .route("/{bucket}/", put(create_bucket_command_handler))
+        .route("/{bucket}/", put(create_bucket_handler))
+        .route("/{bucket}/", delete(delete_bucket_handler))
         .route("/{bucket}/", get(list_objects_v2_handler))
         .layer(middleware::from_fn(s3_auth_middleware))
-        //admin dashboard api idont fucking know
         .route("/health", get(health))
-        //
         .route("/{bucket}/{*key}", get(get_object_handler))
         .layer(cors);
     

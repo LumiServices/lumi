@@ -55,4 +55,7 @@ pub fn delete(&self, table_name: &str, key_column: &str, key: &[u8]) -> rusqlite
     conn.execute(&sql, params![key])?;
     Ok(())
 }
+pub fn update() {
+    
+}
 }

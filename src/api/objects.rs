@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use axum::{
-    body::{Body}, extract::Path, http::{HeaderMap, HeaderValue, StatusCode}, response::IntoResponse
+    body::Body, extract::{Path, Request}, http::{HeaderMap, HeaderValue, StatusCode}, response::IntoResponse
 };
+use reqwest::Method;
 use serde::Serialize;
 use tokio::fs;
 use crate::{core::xml, s3::errors::ErrorCode, db::sqlite::DB};
@@ -47,41 +48,88 @@ pub async fn put_object_handler(
         Some(b) => b,
         None => return ErrorCode::InvalidRequest.into_response(),
     };
-    let file_path = format!("./data/{}/{}", bucket, key);
     if let Err(e) = fs::create_dir_all(format!("./data/{}", bucket)).await {
         eprintln!("Directory creation error: {:?}", e);
         return ErrorCode::InternalError.into_response();
+    }
+    if let Some(source_header_val) = headers.get("x-amz-copy-source") {
+        let source_header = match source_header_val.to_str() {
+            Ok(v) => v,
+            Err(_) => return ErrorCode::InvalidRequest.into_response(),
+        };
+        if !source_header.is_empty() {
+            let source = source_header.trim_start_matches("/");
+            let parts: Vec<&str> = source.splitn(2, "/").collect();
+            if parts.len() != 2 {
+                return ErrorCode::InvalidRequest.into_response();
+            }
+            let source_bucket = parts[0];
+            let source_key = parts[1];
+            let source_file_path = format!("./data/{}/{}", source_bucket, source_key);
+            let dest_file_path = format!("./data/{}/{}", bucket, key);
+            if fs::metadata(&source_file_path).await.is_err() {
+                return ErrorCode::NoSuchKey.into_response();
+            }
+            return match fs::copy(&source_file_path, &dest_file_path).await {
+                Ok(_) => {
+                    let db = DB.get().unwrap();
+                    let source_object_key = format!("{}/{}", source_bucket, source_key);
+                    let dest_object_key = format!("{}/{}", bucket, key);
+                    let _ = db.delete("metadata", "object_key", dest_object_key.as_bytes());
+
+                    if let Ok(Some(ct_bytes)) = db.get(
+                        "metadata",
+                        "object_key",
+                        "content_type",
+                        source_object_key.as_bytes(),
+                    ) {
+                        if let Err(e) = db.insert("metadata", "object_key", "content_type", dest_object_key.as_bytes(), &ct_bytes,)
+                        {eprintln!("Failed to copy metadata: {:?}", e);}
+                    }
+                    StatusCode::OK.into_response()
+                }
+                Err(e) => match e.kind() {
+                    std::io::ErrorKind::NotFound => ErrorCode::NoSuchKey.into_response(),
+                    _ => ErrorCode::InternalError.into_response(),
+                },
+            };
+        }
     }
     let body_bytes = match axum::body::to_bytes(body, usize::MAX).await {
         Ok(bytes) => bytes,
         Err(_) => return ErrorCode::InternalError.into_response(),
     };
-    
-    if let Some(content_type) = headers.get("content-type") {
-        if let Ok(ct_str) = content_type.to_str() {
-            let db = DB.get().unwrap();
-            let object_key = format!("{}/{}", bucket, key);
-            if let Err(e) = db.insert("metadata", "object_key", "content_type", object_key.as_bytes(), ct_str.as_bytes()) {
-                eprintln!("Failed to save content type to db: {:?}", e);
+    let file_path = format!("./data/{}/{}", bucket, key);
+    match fs::write(&file_path, &body_bytes).await {
+        Ok(_) => {
+            if let Some(content_type) = headers.get("content-type") {
+                if let Ok(ct_str) = content_type.to_str() {
+                    let db = DB.get().unwrap();
+                    let object_key = format!("{}/{}", bucket, key);
+                    let _ = db.delete("metadata", "object_key", object_key.as_bytes());
+                    if let Err(e) = db.insert(
+                        "metadata",
+                        "object_key",
+                        "content_type",
+                        object_key.as_bytes(),
+                        ct_str.as_bytes(),
+                    ) {
+                        eprintln!("Failed to save content type to db: {:?}", e);
+                    }
+                }
             }
+            StatusCode::OK.into_response()
         }
-    }
-    
-   match fs::write(&file_path, &body_bytes).await {
-        Ok(_) => StatusCode::OK.into_response(),
         Err(e) => match e.kind() {
             std::io::ErrorKind::NotFound => ErrorCode::NoSuchKey.into_response(),
             _ => ErrorCode::InternalError.into_response(),
-        }
+        },
     }
 }
 
-pub async fn copy_and_put_object_handlers() {
-    // ill write this shit later its 02:00
-}
-
 pub async fn get_object_handler(
-    Path(params): Path<HashMap<String, String>>
+    Path(params): Path<HashMap<String, String>>,
+    req: Request
 ) -> impl IntoResponse {
     let bucket = match params.get("bucket") {
         Some(b) => b,
@@ -92,7 +140,24 @@ pub async fn get_object_handler(
         None => return ErrorCode::InvalidRequest.into_response(),
     };
     let file_path = format!("./data/{}/{}", bucket, key);
-    
+    /*
+    Hangin' with my cousin, readin' dirty magazines
+    We seen two people kissin', we ain't know what that shit mean
+    Then we start re-enactin' everything that we had seen
+    That's when I gave my cousin HEAD, gave my cousin HEAD
+    https://open.spotify.com/track/20fYUtTl5xpG8xXPZkU0yT?si=82a1aa416d0a4c02
+    */
+    if req.method() == Method::HEAD {
+        match fs::metadata(&file_path).await {
+            Ok(metadata) => {
+                let mut headers = HeaderMap::new();
+                headers.insert("content-length", 
+            HeaderValue::from_str(&metadata.len().to_string()).unwrap());
+                return (StatusCode::OK, headers).into_response();
+            } 
+            Err(_) => return ErrorCode::NoSuchKey.into_response(),
+        }
+    }
     match fs::read(&file_path).await {
        Ok(contents) => {
             let mut headers = HeaderMap::new();

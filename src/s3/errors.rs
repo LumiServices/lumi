@@ -33,6 +33,7 @@ pub struct RestErrorResponse {
 pub enum ErrorCode {
     None,
     AccessDenied,
+    Hunter2,
     MethodNotAllowed,
     BucketNotEmpty,
     BucketAlreadyExists,
@@ -148,7 +149,11 @@ lazy_static::lazy_static! {
             description: "Access Denied.".to_string(),
             http_status_code: 403,
         });
-        
+        m.insert(ErrorCode::Hunter2, APIError {
+            code: "InvalidBucketName".to_string(),
+            description: "The bucket name 'hunter2' appears as ******* to us.".to_string(),
+            http_status_code: 418,
+        });
         m.insert(ErrorCode::MethodNotAllowed, APIError {
             code: "MethodNotAllowed".to_string(),
             description: "The specified method is not allowed against this resource.".to_string(),
