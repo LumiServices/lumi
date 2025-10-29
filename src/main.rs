@@ -50,8 +50,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_path = PathBuf::from("./db/lumi.db");
     let db = Database::new(&db_path)?;
     db.create_table("metadata", "object_key", "content_type")?;
-    #[cfg(feature = "iam")]
-    db.create_table("iam_users", "access_key", "user_data")?;
     DB.set(db).expect("Failed to initialize database");
     
     let args = Args::parse();
