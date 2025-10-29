@@ -3,7 +3,7 @@ name: Auto Release on Version Change
 permissions:
   contents: write
   packages: write
-  
+
 on:
   push:
     branches: [ main, master ]
@@ -12,18 +12,19 @@ on:
     branches: [ main, master ]
     paths: [ 'src/core/app.rs' ]
   workflow_dispatch:
-    
+
 jobs:
   check-version:
     runs-on: ubuntu-latest
     outputs:
       version-changed: ${{ steps.version-check.outputs.changed }}
       new-version: ${{ steps.version-check.outputs.version }}
+      is-prerelease: ${{ steps.version-check.outputs.is_prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
-      
+
       - name: Check if version changed
         id: version-check
         run: |
@@ -33,6 +34,7 @@ jobs:
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             echo "This is a PR, skipping release"
             echo "changed=false" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -50,9 +52,18 @@ jobs:
             echo "Version changed from $PREVIOUS_VERSION to $CURRENT_VERSION"
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
+            # Detect prerelease (alpha, beta, rc, nightly)
+            if echo "$CURRENT_VERSION" | grep -Eiq '(alpha|beta|rc|nightly)'; then
+              echo "Detected prerelease version"
+              echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            else
+              echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            fi
           else
             echo "Version unchanged"
             echo "changed=false" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
           fi
 
   build-and-release:
@@ -76,15 +87,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: ${{ matrix.target }}
-      
+
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
-      
+
       - name: Get binary name
         id: binary-name
         shell: bash
@@ -95,7 +106,7 @@ jobs:
             BINARY_NAME="${{ github.event.repository.name }}"
           fi
           echo "name=$BINARY_NAME" >> $GITHUB_OUTPUT
-      
+
       - name: Prepare artifacts
         shell: bash
         run: |
@@ -108,7 +119,7 @@ jobs:
           else
             cp "target/${{ matrix.target }}/release/${BINARY_NAME}" "artifacts/${ARTIFACT_NAME}"
           fi
-      
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -128,23 +139,17 @@ jobs:
         with:
           path: release-artifacts
 
-      - name: Debug and flatten artifacts
+      - name: Flatten artifacts
         run: |
-          echo "=== Original artifact structure ==="
-          find release-artifacts -type f -ls
-          echo "=== Flattening artifacts ==="
           mkdir -p flattened-artifacts
           find release-artifacts -type f -exec cp {} flattened-artifacts/ \;
-          echo "=== Flattened structure ==="
-          ls -la flattened-artifacts/
 
       - name: Create git tag
         run: |
           tag="${{ needs.check-version.outputs.new-version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Check if tag already exists
+
           if git tag -l | grep -q "^$tag$"; then
             echo "Tag $tag already exists"
           else
@@ -154,20 +159,10 @@ jobs:
             echo "Created and pushed tag $tag"
           fi
 
-      - name: Wait for tag to propagate
+      - name: Wait for tag propagation
         run: sleep 10
 
-      - name: Verify tag exists
-        run: |
-          tag="${{ needs.check-version.outputs.new-version }}"
-          if git ls-remote --tags origin | grep -q "refs/tags/$tag$"; then
-            echo "✅ Tag $tag exists on remote"
-          else
-            echo "❌ Tag $tag not found on remote"
-            exit 1
-          fi
-
-      - name: Check if release already exists
+      - name: Check if release exists
         id: check_release
         run: |
           tag="${{ needs.check-version.outputs.new-version }}"
@@ -187,15 +182,15 @@ jobs:
         run: |
           tag="${{ needs.check-version.outputs.new-version }}"
           echo "### Downloads" > release_notes.md
-          echo "- **Linux (x64)**: Download the \`x86_64-unknown-linux-gnu\` binary" >> release_notes.md
-          echo "- **Windows (x64)**: Download the \`x86_64-pc-windows-msvc.exe\` binary" >> release_notes.md
-          echo "- **macOS (Intel)**: Download the \`x86_64-apple-darwin\` binary" >> release_notes.md
-          echo "- **macOS (Apple Silicon)**: Download the \`aarch64-apple-darwin\` binary" >> release_notes.md
+          echo "- **Linux (x64)**: x86_64-unknown-linux-gnu" >> release_notes.md
+          echo "- **Windows (x64)**: x86_64-pc-windows-msvc.exe" >> release_notes.md
+          echo "- **macOS (Intel)**: x86_64-apple-darwin" >> release_notes.md
+          echo "- **macOS (Apple Silicon)**: aarch64-apple-darwin" >> release_notes.md
           echo "" >> release_notes.md
           echo "### Installation" >> release_notes.md
-          echo "1. Download the appropriate binary for your platform" >> release_notes.md
-          echo "2. Make it executable (Linux/macOS): \`chmod +x <binary-name>\`" >> release_notes.md
-          echo "3. Optionally move to a directory in your PATH" >> release_notes.md
+          echo "1. Download the binary for your platform" >> release_notes.md
+          echo "2. Make it executable (Linux/macOS): \`chmod +x <binary>\`" >> release_notes.md
+          echo "3. Optionally move it to your PATH" >> release_notes.md
 
           {
             echo "notes<<EOF"
@@ -203,44 +198,35 @@ jobs:
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Release (Primary Method)
+      - name: Create GitHub Release
         if: steps.check_release.outputs.exists == 'false'
-        id: create_release_primary
-        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.check-version.outputs.new-version }}
           name: "Release ${{ needs.check-version.outputs.new-version }}"
           body: ${{ steps.release_notes.outputs.notes }}
           draft: false
-          prerelease: false 
+          prerelease: ${{ needs.check-version.outputs.is-prerelease == 'true' }}
           files: flattened-artifacts/*
-          fail_on_unmatched_files: true
-          token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create GitHub Release (Fallback with CLI)
-        if: steps.check_release.outputs.exists == 'false' && steps.create_release_primary.outcome == 'failure'
+      - name: Fallback (CLI)
+        if: steps.check_release.outputs.exists == 'false'
         run: |
           tag="${{ needs.check-version.outputs.new-version }}"
-          # Create release with GitHub CLI - explicitly not a prerelease
-          gh release create "$tag" \
-            --title "Release $tag" \
-            --notes "${{ steps.release_notes.outputs.notes }}" \
-            --latest \
-            flattened-artifacts/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create GitHub Release (Fallback with CLI)
-        if: steps.check_release.outputs.exists == 'false' && steps.create_release_primary.outcome == 'failure'
-        run: |
-          tag="${{ needs.check-version.outputs.new-version }}"
-          # Create release with GitHub CLI
-          gh release create "$tag" \
-            --title "Release $tag" \
-            flattened-artifacts/*
+          if [ "${{ needs.check-version.outputs.is-prerelease }}" = "true" ]; then
+            gh release create "$tag" \
+              --title "Release $tag" \
+              --notes "${{ steps.release_notes.outputs.notes }}" \
+              --prerelease \
+              flattened-artifacts/*
+          else
+            gh release create "$tag" \
+              --title "Release $tag" \
+              --notes "${{ steps.release_notes.outputs.notes }}" \
+              flattened-artifacts/*
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -249,10 +235,5 @@ jobs:
         run: |
           echo "## Workflow Summary" >> $GITHUB_STEP_SUMMARY
           echo "- **New Version**: ${{ needs.check-version.outputs.new-version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version Changed**: ${{ needs.check-version.outputs.version-changed }}" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.check-version.outputs.version-changed }}" = "true" ]; then
-            echo "- **Tag Created**: ✅" >> $GITHUB_STEP_SUMMARY
-            echo "- **Release Method**: ${{ steps.create_release_primary.outcome == 'success' && 'Action' || 'CLI Fallback' }}" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- **Action**: No release created (no version change)" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "- **Prerelease**: ${{ needs.check-version.outputs.is-prerelease }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag Created**: ✅" >> $GITHUB_STEP_SUMMARY
