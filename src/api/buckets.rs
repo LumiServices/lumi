@@ -6,6 +6,10 @@ use axum::{extract::Path, response::IntoResponse};
 use reqwest::StatusCode;
 use crate::core::xml;
 use crate::s3::errors::ErrorCode;
+use crate::s3::policies::{
+    BucketPolicy,
+    PolicyManager,
+};
 
 #[derive(Serialize)]
 #[serde(rename = "ListAllMyBucketsResult", rename_all = "PascalCase")]
@@ -54,7 +58,9 @@ pub async fn create_bucket_handler(
         eprintln!("Failed to create bucket directory: {}", e);
         return ErrorCode::InternalError.into_response();
     }
-    
+    if let Err(e) = PolicyManager::set_bucket_policy(bucket, BucketPolicy::PublicRead) {
+    eprintln!("Failed to set default bucket policy: {}", e);
+    } 
     (StatusCode::CREATED).into_response()
 }
 
@@ -82,6 +88,8 @@ pub async fn delete_bucket_handler(
         eprintln!("Failed to delete bucket directory: {}", e);
         return ErrorCode::InternalError.into_response();
     }
+    let db = crate::db::sqlite::DB.get().unwrap();
+    let _ = db.delete("bucket_policies", "bucket_name", bucket.as_bytes());
     (StatusCode::CREATED).into_response()
 }
 

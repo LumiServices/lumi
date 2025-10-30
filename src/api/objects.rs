@@ -5,7 +5,7 @@ use axum::{
 use reqwest::Method;
 use serde::Serialize;
 use tokio::fs;
-use crate::{core::xml, s3::errors::ErrorCode, db::sqlite::DB};
+use crate::{core::xml, db::sqlite::DB, s3::{errors::ErrorCode, policies::PolicyManager}};
 use chrono::{DateTime, Utc};
 
 #[derive(Serialize)]
@@ -139,6 +139,13 @@ pub async fn get_object_handler(
         Some(k) => k,
         None => return ErrorCode::InvalidRequest.into_response(),
     };
+    let policy = match PolicyManager::get_bucket_policy(bucket) {
+        Ok(p) => p,
+        Err(_) => return ErrorCode::InternalError.into_response(),
+    };
+    if !policy.allows_anonymous_read() {
+        return ErrorCode::AccessDenied.into_response();
+    }
     let file_path = format!("./data/{}/{}", bucket, key);
     /*
     Hangin' with my cousin, readin' dirty magazines

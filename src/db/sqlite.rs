@@ -55,13 +55,12 @@ pub fn delete(&self, table_name: &str, key_column: &str, key: &[u8]) -> rusqlite
     conn.execute(&sql, params![key])?;
     Ok(())
 }
-pub fn update(&self, table_name: &str, value_column: &str, new_value: &[u8], key_column: &str, key: &[u8]) -> rusqlite::Result<()> {
+pub fn update(&self, table_name: &str, value_column: &str, new_value: &[u8], key_column: &str, key: &[u8]) -> rusqlite::Result<usize> {
     let sql = format!(
         "UPDATE {} SET {} = ?1 WHERE {} = ?2",
         table_name, value_column, key_column
     );
     let conn = self.conn.lock().unwrap();
-    conn.execute(&sql, params![new_value, key])?;
-    Ok(())
+    conn.execute(&sql, params![new_value, key])
 }
 }

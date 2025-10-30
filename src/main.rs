@@ -7,7 +7,7 @@ use lumi::{
     api,
     core::{self, app::get_latest_github_release},
     discord::webhook::{Embed, webhook_request},
-    s3::credentials::{generate_access_key, generate_secret_key},
+    s3::credentials::{generate_access_key, generate_secret_key}, s3::policies::{BucketPolicy, PolicyManager},
     db::sqlite::{Database, DB},
 };
 
@@ -170,13 +170,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Commands::SetBucketPolicy { bucket, policy } => {
-        println!("{}", "Coming soon ".yellow());
-        Ok(())
-        }  
-
-    Commands::GetBucketPolicy { bucket } => {
-        println!("{}", "Coming soon ".yellow());
-        Ok(())
-    }
+            let bucket_policy = match BucketPolicy::from_str(&policy) {
+                Some(p) => p,
+                None => {
+                    eprintln!("{}", format!("Invalid policy: {}. Valid options: private, public-read, public", policy).red());
+                    std::process::exit(1);
+                }
+            };
+            PolicyManager::set_bucket_policy(&bucket, bucket_policy)?;
+            println!("Bucket '{}' policy set to {:?}", bucket, policy);
+            Ok(())
+        }
+        Commands::GetBucketPolicy { bucket } => {
+            use lumi::s3::policies::PolicyManager;
+            
+            match PolicyManager::get_bucket_policy(&bucket) {  // Add & here
+                Ok(policy) => {
+                    println!("Bucket: {}", bucket.bright_blue());
+                    println!("Policy: {}", policy.as_str().bright_green());
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("{}", format!("Failed to get policy: {}", e).red());
+                    std::process::exit(1);
+                }
+            }
+        }
     }
 }
