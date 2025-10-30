@@ -184,7 +184,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::GetBucketPolicy { bucket } => {
             use lumi::s3::policies::PolicyManager;
             
-            match PolicyManager::get_bucket_policy(&bucket) {  // Add & here
+            match PolicyManager::get_bucket_policy(&bucket) {
                 Ok(policy) => {
                     println!("Bucket: {}", bucket.bright_blue());
                     println!("Policy: {}", policy.as_str().bright_green());
