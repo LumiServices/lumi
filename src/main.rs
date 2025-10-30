@@ -37,6 +37,14 @@ enum Commands {
         #[arg(long, short = 's', default_value_t = 40)]
         secret_key_length: usize,
     },
+    SetBucketPolicy {
+        bucket: String,
+        #[arg(value_parser = ["private", "public-read", "public"])]
+        policy: String,
+    },
+    GetBucketPolicy {
+        bucket: String,
+    },
 }
 
 #[tokio::main]
@@ -50,6 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_path = PathBuf::from("./db/lumi.db");
     let db = Database::new(&db_path)?;
     db.create_table("metadata", "object_key", "content_type")?;
+    db.create_table("bucket_policies", "bucket_name", "policy")?;
     DB.set(db).expect("Failed to initialize database");
     
     let args = Args::parse();
@@ -160,5 +169,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+        Commands::SetBucketPolicy { bucket, policy } => {
+        println!("{}", "Coming soon ".yellow());
+        Ok(())
+        }  
+
+    Commands::GetBucketPolicy { bucket } => {
+        println!("{}", "Coming soon ".yellow());
+        Ok(())
+    }
     }
 }
