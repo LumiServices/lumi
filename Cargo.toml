@@ -3,6 +3,7 @@ members = [
     "lumi",
     "crates/database",
     "crates/utils",
+    "crates/server",
 ]
 resolver = "2"
 
@@ -10,3 +11,12 @@ resolver = "2"
 edition = "2024"
 version = "0.0.1"
 license = "MIT"
+
+[workspace.dependencies]
+# /crates/*
+lumi_server = { path = "crates/server", version = "*"}
+
+axum = "0.8.8"
+quick-xml = "0.38.4"
+serde = { version = "1.0.228", features = ["derive"]}
+tokio = { version = "1.48.0", features = ["full"] }

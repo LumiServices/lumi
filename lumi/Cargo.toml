@@ -6,6 +6,8 @@ license.workspace = true
 description = ""
 
 [dependencies]
+tokio = { workspace = true }
+lumi_server = { workspace = true }
 
 [[bin]]
 name = "lumi"
