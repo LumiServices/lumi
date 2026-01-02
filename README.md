@@ -8,7 +8,7 @@
 ## Build from source
 ```sh
 git clone https://github.com/ros-e/lumi.git
-cd lumi && just build
+cd lumi && 
 ```
 
 ## Setup
