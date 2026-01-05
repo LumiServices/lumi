@@ -3,11 +3,13 @@ name = "lumi"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = ""
+description = "A object-storage service built with rust"
 
 [dependencies]
 tokio = { workspace = true }
 lumi_server = { workspace = true }
+lumi_utils = { workspace = true }
+clap = { workspace = true }
 
 [[bin]]
 name = "lumi"

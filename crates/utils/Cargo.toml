@@ -1,5 +1,10 @@
 [package]
-name = "lumi-utils"
+name = "lumi_utils"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
+
+[dependencies]
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
