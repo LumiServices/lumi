@@ -1,5 +1,5 @@
 use axum::{
-    Router,
+    Router, routing::get,
 };
 use tower_http::{
     cors::{CorsLayer, Any},
@@ -11,7 +11,6 @@ pub async fn start_http_server(
     host: String,
     port: u64,
     allowed_origins: String,
-    logs: bool,
 ) -> Result<(), Box<dyn Error>> {  
     let cors_layer = if allowed_origins == "*" {
         CorsLayer::new()
@@ -32,12 +31,13 @@ pub async fn start_http_server(
     let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
     println!("REST API started on http://{}:{}", host, port);
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    let mut routes = Router::new();
+    let mut routes = Router::new()
+     .route("/health", get(health));
     routes = routes.layer(cors_layer); 
-    if logs {
-        routes = routes.layer(TraceLayer::new_for_http());
-    }
-    
     axum::serve(listener, routes).await?;
     Ok(())
+}
+
+async fn health() -> &'static str {
+    "ok"
 }

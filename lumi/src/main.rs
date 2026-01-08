@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 use lumi_server::{http::start_http_server};
 use lumi_utils::update::fetch_latest_github_release;
-use std::io::Write;
 #[derive(Parser, Debug)]
 #[command(version = env!("CARGO_PKG_VERSION"), about = "lumi CLI")]
 struct Args {
@@ -17,8 +16,6 @@ enum Commands {
         port: u64,
         #[arg(long, default_value = "*")]
         allowed_origin: String,
-        #[arg(long)]
-        logs: bool,
     }, 
     Update,
 }
@@ -26,8 +23,8 @@ enum Commands {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     match args.command {
-        Commands::Serve { host, port, allowed_origin, logs } => {
-                start_http_server(host, port, allowed_origin, logs).await?;
+        Commands::Serve { host, port, allowed_origin, } => {
+                start_http_server(host, port, allowed_origin).await?;
                 Ok(())
             }
         Commands::Update => {
