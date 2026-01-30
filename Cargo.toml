@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "lumi",
-    "crates/database",
     "crates/utils",
     "crates/server",
 ]

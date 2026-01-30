@@ -880,10 +880,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lumi-database"
-version = "2.0.0+rc1"
-
-[[package]]
 name = "lumi_server"
 version = "2.0.0+rc1"
 dependencies = [
