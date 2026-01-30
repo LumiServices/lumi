@@ -2,7 +2,7 @@
 members = [
     "lumi",
     "crates/utils",
-    "crates/server",
+    "crates/server", "crates/cluster",
 ]
 resolver = "2"
 
