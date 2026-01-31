@@ -5,6 +5,8 @@ version.workspace = true
 license.workspace = true
 
 [dependencies]
+axum = { workspace = true }
+lazy_static = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
