@@ -282,10 +282,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
 
 [[package]]
-name = "cluster"
-version = "2.0.0+rc1"
-
-[[package]]
 name = "cmake"
 version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -882,6 +878,10 @@ dependencies = [
  "lumi_utils",
  "tokio",
 ]
+
+[[package]]
+name = "lumi_cluster"
+version = "2.0.0+rc1"
 
 [[package]]
 name = "lumi_server"
