@@ -1,4 +1,5 @@
 pub mod credentials;
+pub mod aws_sigv4;
 pub const DEFAULT_ACCESS_KEY: &str = "lumiserver";
 pub const DEFAULT_SECRET_KEY: &str = "lumiserver";
 pub const MIN_LEG_ACCESS_KEY: usize = 6;
@@ -6,6 +7,7 @@ pub const MAX_LEG_ACCESS_KEY: usize = 20; //ill probably remove this later tbh
 pub const MIN_LEG_SECRET_KEY: usize = 6;
 pub const MAX_LEG_SECRET_KEY: usize = 40; //same with this
 pub const ALPHA_NUMERIC_TABLE: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const AWS_V4_ALGO: &str = "AWS4-HMAC-SHA256";
 
 #[cfg(test)]
 mod test {

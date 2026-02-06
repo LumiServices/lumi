@@ -67,10 +67,3 @@ pub fn generate_secret_key(length: usize) -> Result<String, KeyError> {
         }
         Ok(result)
 }
-
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Credentials {
-   pub access_key: String,
-   pub secret_key: String,
-}
