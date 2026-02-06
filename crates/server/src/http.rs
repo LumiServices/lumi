@@ -3,9 +3,10 @@ use axum::{
 };
 use tower_http::{
     cors::{CorsLayer, Any},
-    trace::TraceLayer,
 };
 use std::{error::Error, net::SocketAddr};
+
+use crate::routes::bucket::list_buckets_handler;
 
 pub async fn start_http_server(
     host: String,
@@ -32,7 +33,8 @@ pub async fn start_http_server(
     println!("REST API started on http://{}:{}", host, port);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     let mut routes = Router::new()
-     .route("/health", get(health));
+     .route("/health", get(health))
+     .route("/", get(list_buckets_handler));
     routes = routes.layer(cors_layer); 
     axum::serve(listener, routes).await?;
     Ok(())
