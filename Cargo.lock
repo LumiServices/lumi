@@ -1026,6 +1026,7 @@ dependencies = [
  "quick-xml",
  "serde",
  "tokio",
+ "tokio-util",
  "tower-http",
 ]
 
