@@ -106,6 +106,9 @@ pub async fn create_bucket(bucket: String) -> impl IntoResponse {
         }
         match tokio::fs::create_dir_all(&path).await {
             Ok(_) => StatusCode::OK.into_response(),
-            Err(_) => ErrorCode::BucketAlreadyExists.into_response(),
+            Err(e) => {
+                eprintln!("Failed to create bucket '{}': {}", bucket, e);
+                ErrorCode::InternalError.into_response()
+            }
         }
 }
