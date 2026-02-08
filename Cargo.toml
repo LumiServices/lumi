@@ -2,7 +2,9 @@
 members = [
     "lumi",
     "crates/utils",
-    "crates/server", "crates/cluster", "crates/credentials",
+    "crates/server", 
+    "crates/cluster", 
+    "crates/credentials",
 ]
 resolver = "2"
 
@@ -13,7 +15,7 @@ license = "MIT"
 
 [workspace.dependencies]
 # /crates/*
-lumi_server = { path = "crates/server", version = "*"}
+lumi_server = { path = "crates/server"}
 lumi_utils = { path = "crates/utils" }
 lumi_credentials = { path = "crates/credentials"}
 # external packages

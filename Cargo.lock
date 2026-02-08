@@ -408,17 +408,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "credentials"
-version = "2.0.0+rc1"
-dependencies = [
- "axum",
- "hex",
- "hmac",
- "rand",
- "sha2",
-]
-
-[[package]]
 name = "crypto-common"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1017,11 +1006,23 @@ name = "lumi_cluster"
 version = "2.0.0+rc1"
 
 [[package]]
+name = "lumi_credentials"
+version = "2.0.0+rc1"
+dependencies = [
+ "axum",
+ "hex",
+ "hmac",
+ "rand",
+ "sha2",
+]
+
+[[package]]
 name = "lumi_server"
 version = "2.0.0+rc1"
 dependencies = [
  "axum",
  "chrono",
+ "lumi_credentials",
  "lumi_utils",
  "quick-xml",
  "serde",

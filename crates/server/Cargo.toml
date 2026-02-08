@@ -12,4 +12,5 @@ tokio-util = { workspace = true }
 tower-http = { workspace = true }
 quick-xml = { workspace = true }
 lumi_utils = { workspace = true }
-chrono = {workspace = true }
+lumi_credentials = { workspace = true }
+chrono = { workspace = true }

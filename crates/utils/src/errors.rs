@@ -156,7 +156,37 @@ impl ErrorCode {
                 description: "A header you provided implies functionality that is not implemented".into(),
                 http_status_code: 501,
             },
-            // Add more as needed, or use a default
+            // S3 auth / signing errors (standard codes and messages)
+            ErrorCode::MissingCredTag => APIError {
+                code: "MissingAuthenticationToken".into(),
+                description: "The request was not signed.".into(),
+                http_status_code: 403,
+            },
+            ErrorCode::CredMalformed => APIError {
+                code: "AuthorizationHeaderMalformed".into(),
+                description: "The authorization header that you provided is not valid.".into(),
+                http_status_code: 400,
+            },
+            ErrorCode::SignatureDoesNotMatch => APIError {
+                code: "SignatureDoesNotMatch".into(),
+                description: "The request signature that the server calculated does not match the signature that you provided. Check your AWS secret access key and signing method. For more information, see REST Authentication and SOAP Authentication.".into(),
+                http_status_code: 403,
+            },
+            ErrorCode::InvalidAccessKeyId => APIError {
+                code: "InvalidAccessKeyId".into(),
+                description: "The AWS access key ID that you provided does not exist in our records.".into(),
+                http_status_code: 403,
+            },
+            ErrorCode::RequestBytesExceed => APIError {
+                code: "MaxMessageLengthExceeded".into(),
+                description: "Your request was too large.".into(),
+                http_status_code: 400,
+            },
+            ErrorCode::InvalidRequest => APIError {
+                code: "InvalidRequest".into(),
+                description: "The request was invalid.".into(),
+                http_status_code: 400,
+            },
             _ => APIError {
                 code: "InternalError".into(),
                 description: "An internal error occurred".into(),
