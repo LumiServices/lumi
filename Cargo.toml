@@ -2,8 +2,8 @@
 members = [
     "lumi",
     "crates/utils",
-    "crates/server", 
-    "crates/cluster", 
+    "crates/server",
+    "crates/cluster",
     "crates/credentials",
 ]
 resolver = "2"
@@ -34,3 +34,4 @@ rand = "0.9.2"
 sha2 = "0.10.9"
 hmac = "0.12.1"
 hex = "0.4.3"
+md5 = "0.8.0"

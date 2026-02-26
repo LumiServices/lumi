@@ -14,3 +14,4 @@ quick-xml = { workspace = true }
 lumi_utils = { workspace = true }
 lumi_credentials = { workspace = true }
 chrono = { workspace = true }
+md5 = { workspace = true }
